@@ -155,6 +155,7 @@ static void read_theme(Dashboard *ui) {
     if (ui->theme_light != theme.light || ui->theme_id != theme.style ||
         ui->theme_accent != theme.accent || ui->wheel_percent != theme.wheel ||
         ui->language_id != theme.language) {
+        if (ui->wheel_percent != theme.wheel) ui->wheel_rem = 0;
         ui->theme_light = theme.light;
         ui->theme_id = theme.style;
         ui->theme_accent = theme.accent;
