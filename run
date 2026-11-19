@@ -1,0 +1,20 @@
+#!/bin/sh
+# Q2 Pod launches this script from /mnt/mmc/.weather.
+pid=/tmp/q2-weather
+if [ "$1" != --loop ]; then
+    [ -f "$pid" ] && kill -0 "$(cat "$pid")" 2>/dev/null && exit 0
+    dir=$(cd "$(dirname "$0")" && pwd) || exit 1
+    cp -f "$dir/q2-weather" /tmp/q2-weather.bin || exit 1
+    chmod 755 /tmp/q2-weather.bin || exit 1
+    cp -f "$0" /tmp/q2-weather.run || exit 1
+    exec /bin/sh /tmp/q2-weather.run --loop
+fi
+(
+    child=
+    trap '[ -n "$child" ] && kill -TERM "$child" 2>/dev/null && wait "$child"; rm -f "$pid" /tmp/q2-weather.bin /tmp/q2-weather.run; exit 0' TERM INT
+    /tmp/q2-weather.bin &
+    child=$!
+    wait "$child"
+    rm -f "$pid" /tmp/q2-weather.bin /tmp/q2-weather.run
+) </dev/null >/dev/null 2>&1 &
+echo $! > "$pid"
