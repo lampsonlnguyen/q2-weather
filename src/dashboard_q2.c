@@ -31,6 +31,8 @@
 #define SERVICE_PATH "/mnt/mmc/.weather/q2-weather-service"
 #define UNITS_PATH "/mnt/mmc/.weather/units"
 #define REFRESH_MS 1000
+#define NATIVE_KB_CAP "/tmp/q2-weather.keyboard.available"
+#define NATIVE_KB_REQ "/tmp/q2-weather.keyboard.request"
 
 static volatile sig_atomic_t interrupted;
 
@@ -263,6 +265,7 @@ int main(void) {
     unsigned long last_theme_check = 0;
     int initial_refresh = service > 0; /* Newly launched helper refreshes itself. */
     int last_units = ui.units_f;
+    int keyboard_sent = 0;
     while (!interrupted && !ui.quit) {
         unsigned long now = now_ms();
         if (now - last_theme_check >= 10000) {
@@ -314,7 +317,18 @@ int main(void) {
             last_units = ui.units_f;
             save_units(last_units);
         }
-        if (ui.redraw) {
+        if (ui.page != 3 && keyboard_sent) {
+            keyboard_sent = 0;
+            unlink(NATIVE_KB_REQ);
+        }
+        if (ui.page == 3) {
+            int keyboard_available = access(NATIVE_KB_CAP, F_OK) == 0;
+            if (keyboard_available != ui.native_keyboard) {
+                ui.native_keyboard = keyboard_available;
+                ui.redraw = 1;
+            }
+        }
+        if (ui.redraw && !(keyboard_sent && ui.page == 3)) {
             unsigned target = pan ? (shown ? 0 : DASH_WIDTH) : shown;
             dashboard_render(&ui, pixels + target * stride, stride);
             if (pan) {
@@ -328,10 +342,19 @@ int main(void) {
             }
             ui.redraw = 0;
         }
+        /* Draw the waiting screen once, then let firmware's native T9
+         * input method own the foreground until its result arrives. */
+        if (ui.page == 3 && ui.native_keyboard && !keyboard_sent) {
+            int marker = open(NATIVE_KB_REQ, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+            if (marker >= 0) {
+                close(marker);
+                keyboard_sent = 1;
+            }
+        }
         struct pollfd pfd = {input, POLLIN, 0};
         int got = poll(&pfd, 1, 1000);
         if (got > 0 && (pfd.revents & POLLIN)) {
-            char msg[80];
+            char msg[160];
             ssize_t count = recv(input, msg, sizeof msg - 1, 0);
             if (count > 0) {
                 msg[count] = 0;
@@ -347,6 +370,7 @@ int main(void) {
     }
     close(input);
     unlink(INPUT_SOCKET);
+    unlink(NATIVE_KB_REQ);
     munmap(mapped, fix.smem_len);
     close(fb);
     if (service > 0) kill(service, SIGTERM);
