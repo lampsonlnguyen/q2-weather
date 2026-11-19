@@ -61,7 +61,8 @@ int weather_refresh(WeatherApp *app,const WeatherBackend *backend,int detect_cur
         l->temperature_c=temp;l->humidity=humidity;l->weather_code=code;
         l->updated_at=timestamp;l->valid=1;
         if(backend->get_forecast){
-            WeatherDay days[Q2_FORECAST_DAYS]={{0}};
+            WeatherDay days[Q2_FORECAST_DAYS];
+            memset(days, 0, sizeof days);
             if(!backend->get_forecast(backend->ctx,l->latitude,l->longitude,days,Q2_FORECAST_DAYS)){
                 memcpy(l->days,days,sizeof(days));
                 l->forecast_valid=1;
