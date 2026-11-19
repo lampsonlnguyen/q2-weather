@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: MIT */
 #include "dashboard.h"
 #include "art.h"
-#include "http.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -52,6 +51,20 @@ static void label(uint32_t *dst, unsigned stride, int x, int y, const char *s, i
         }
         x += 8 * scale;
     }
+}
+
+static const char *condition(int code) {
+    if (code == 0) return "Clear";
+    if (code <= 2 && code >= 1) return "Partly cloudy";
+    if (code == 3) return "Cloudy";
+    if (code == 45 || code == 48) return "Fog";
+    if (code >= 51 && code <= 57) return "Drizzle";
+    if (code >= 61 && code <= 67) return "Rain";
+    if (code >= 71 && code <= 77) return "Snow";
+    if (code >= 80 && code <= 82) return "Showers";
+    if (code >= 85 && code <= 86) return "Snow showers";
+    if (code >= 95) return "Thunderstorm";
+    return "Cloudy";
 }
 
 static int icon_index(int code) {
@@ -145,7 +158,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             snprintf(temp, sizeof temp, "%d%c", units(loc->temperature_c, ui->units_f),
                      ui->units_f ? 'F' : 'C');
             label(dst, stride, 269, 138, temp, 2, TEXT, 5);
-            label(dst, stride, 256, 169, weather_description(loc->weather_code), 1, DIM, 13);
+            label(dst, stride, 256, 169, condition(loc->weather_code), 1, DIM, 13);
         } else {
             label(dst, stride, 263, 113, "NO DATA", 1, DIM, 9);
         }
@@ -158,7 +171,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             const WeatherDay *day = &loc->days[ui->day];
             icon(dst, stride, 14, 100, day->weather_code, 4);
             label(dst, stride, 132, 104, day->date, 1, DIM, 11);
-            label(dst, stride, 132, 125, weather_description(day->weather_code), 1,
+            label(dst, stride, 132, 125, condition(day->weather_code), 1,
                   TEXT, 27);
             char text[48];
             snprintf(text, sizeof text, "HIGH %d%c", units(day->high_c, ui->units_f),
