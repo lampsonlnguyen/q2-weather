@@ -4,6 +4,28 @@
 #include <stdio.h>
 #include <string.h>
 
+/* QWERTY rows: 10, 9, 7 letters; Space / Delete / Search. */
+static const char keyboard[] = "QWERTYUIOPASDFGHJKLZXCVBNM_<>"; 
+#define KEY_COUNT ((int)sizeof keyboard - 1)
+
+static void keyboard_action(Dashboard *ui) {
+    char ch = keyboard[ui->keyboard_index];
+    if (ch == '>') {
+        if (ui->city_length) {
+            ui->search_request = 1;
+            ui->search_result = 1;
+            ui->page = 2;
+            ui->keyboard_index = 0;
+        }
+    } else if (ch == '<') {
+        if (ui->city_length) ui->city_query[--ui->city_length] = 0;
+    } else if (ui->city_length < (int)sizeof ui->city_query - 1) {
+        ui->city_query[ui->city_length++] = ch == '_' ? ' ' : ch;
+        ui->city_query[ui->city_length] = 0;
+    }
+}
+
+
 static void open_location(Dashboard *ui) {
     ui->day = 0;
     ui->wheel_rem = 0;
@@ -75,16 +97,16 @@ int dashboard_input(Dashboard *ui, const char *event) {
         return 1;
     }
     int wheel;
-    if (ui->page == 3 && sscanf(event, "w %d", &wheel) == 1) return 0;
     if (sscanf(event, "w %d", &wheel) == 1) {
-        ui->wheel_rem += wheel;
+        /* Q2 full-screen input sign is opposite the Library list. */
+        ui->wheel_rem -= wheel;
         int changed = 0;
         int *selection = ui->page == 0 ? &ui->slot :
                          ui->page == 1 || ui->page == 4 ? &ui->day :
                          &ui->keyboard_index;
         int max = ui->page == 0 ? 1 :
                   ui->page == 2 ? 3 :
-                  ui->page == 3 ? 0 :
+                  ui->page == 3 ? KEY_COUNT - 1 :
                   Q2_FORECAST_DAYS - 1;
         int step = 1400 / (ui->wheel_percent >= 10 ? ui->wheel_percent : 50);
         if (step < 8) step = 8;
@@ -106,7 +128,7 @@ int dashboard_input(Dashboard *ui, const char *event) {
             back(ui);
         } else if (code == 218) {
             if (ui->page == 3)
-                return 0; /* Q2 Pod owns the native keyboard. */
+                keyboard_action(ui);
             else if (ui->page == 2)
                 settings_action(ui);
             else if (ui->page == 0)
@@ -131,7 +153,19 @@ int dashboard_input(Dashboard *ui, const char *event) {
         if (y < 42 && x < 85) {
             back(ui);
         } else if (ui->page == 3) {
-            return 0; /* Device keyboard events are handled by Q2 Pod. */
+            int idx = -1;
+            if (y >= 115 && y < 149 && x >= 32 && x < 342) {
+                idx = (x - 32) / 31;
+            } else if (y >= 154 && y < 188 && x >= 47 && x < 326) {
+                idx = 10 + (x - 47) / 31;
+            } else if (y >= 193 && y < 227 && x >= 78 && x < 295) {
+                idx = 19 + (x - 78) / 31;
+            } else if (y >= 238 && y < 275 && x >= 47 && x < 326) {
+                idx = 26 + (x - 47) / 93;
+            }
+            if (idx < 0 || idx >= KEY_COUNT) return 0;
+            ui->keyboard_index = idx;
+            keyboard_action(ui);
         } else if (ui->page == 2) {
             int idx = (y - 76) / 48;
             if (y < 76 || idx < 0 || idx >= 4) return 0;
