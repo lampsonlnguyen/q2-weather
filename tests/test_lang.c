@@ -12,7 +12,7 @@ int main(void) {
     assert(!strcmp(weather_text(WX_WEATHER), "Forecasts"));
     assert(!strcmp(weather_text(WX_LOCATIONS), "Cities"));
     assert(!strcmp(weather_text(WX_BACK), "Back"));
-    const char windows[] = "WEATHER=Weather from Windows\\r\\n";
+    const char windows[] = "WEATHER=Weather from Windows\r\n";
     weather_language_parse(windows, sizeof windows - 1);
     assert(!strcmp(weather_text(WX_WEATHER), "Weather from Windows"));
     weather_language_parse(NULL, 0);
