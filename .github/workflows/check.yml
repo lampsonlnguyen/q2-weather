@@ -71,3 +71,30 @@ jobs:
               --verify-tag --prerelease --generate-notes \
               --title "$RELEASE_TAG (device test)"
           fi
+
+  publish_graphics:
+    # One-time v0.2.0 release from a green main build. Future pushes do not
+    # replace published artifacts; subsequent versions use the tag workflow.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: q2-weather-card-app
+          path: dist
+      - name: Publish native weather artwork release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          if gh release view v0.2.0 >/dev/null 2>&1; then
+            echo 'v0.2.0 already published; not replacing it.'
+            exit 0
+          fi
+          gh release create v0.2.0 dist/q2-weather.zip \
+            --target "$TARGET_SHA" --title "Q2 Weather v0.2.0" \
+            --notes "Adds tiny pixel-weather sprites to Q2 Pod native Library rows, a launcher icon, and a seven-day illustrated forecast. Preserves IP location, Open-Meteo, offline cache, native Q2 wheel and firmware themes. Weather artwork requires the card-app art capability (older firmware falls back to text). On-device visual rendering is pending hardware testing."
