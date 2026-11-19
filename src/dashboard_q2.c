@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 /* Full-screen graphical Library app. Its music/player audio remains untouched. */
 #include "dashboard.h"
+#include "theme.h"
 #include "weather.h"
 
 #include <errno.h>
@@ -140,38 +141,22 @@ static void *city_lookup(void *unused) {
 static void read_theme(Dashboard *ui) {
     FILE *file = fopen("/mnt/data/config.ini", "rb");
     if (!file) return;
-    int in_ipod = 0, light = 0, theme = 0, accent = -1;
-    char line[192];
-    while (fgets(line, sizeof line, file)) {
-        char *p = line;
-        while (*p == ' ' || *p == '\t') p++;
-        if (*p == '[') {
-            in_ipod = !strncmp(p, "[IPOD]", 6);
-            continue;
-        }
-        if (!in_ipod || *p == '#' || *p == ';') continue;
-        char *eq = strchr(p, '=');
-        if (!eq) continue;
-        *eq++ = 0;
-        char *end = p + strlen(p);
-        while (end > p && (end[-1] == ' ' || end[-1] == '\t')) *--end = 0;
-        int value = atoi(eq);
-        if (!strcmp(p, "LIGHT") && value >= 0 && value <= 2) light = value;
-        else if (!strcmp(p, "THEME") && value >= 0 && value <= 2) theme = value;
-        else if (!strcmp(p, "MINIMAL_ACCENT") && value >= 0 && value < 9)
-            accent = value;
-    }
+    char data[16384];
+    size_t len = fread(data, 1, sizeof data, file);
     fclose(file);
-    if (light == 2) {
-        time_t t = time(NULL);
-        struct tm local;
-        if (localtime_r(&t, &local)) light = local.tm_hour >= 7 && local.tm_hour < 19;
-        else light = 0;
-    }
-    if (ui->theme_light != light || ui->theme_id != theme || ui->theme_accent != accent) {
-        ui->theme_light = light;
-        ui->theme_id = theme;
-        ui->theme_accent = accent;
+    time_t now = time(NULL);
+    struct tm local;
+    int hour = localtime_r(&now, &local) ? local.tm_hour : 0;
+    WeatherTheme theme;
+    weather_theme_parse(&theme, data, len, hour);
+    if (ui->theme_light != theme.light || ui->theme_id != theme.style ||
+        ui->theme_accent != theme.accent || ui->wheel_percent != theme.wheel ||
+        ui->language_id != theme.language) {
+        ui->theme_light = theme.light;
+        ui->theme_id = theme.style;
+        ui->theme_accent = theme.accent;
+        ui->wheel_percent = theme.wheel;
+        ui->language_id = theme.language;
         ui->redraw = 1;
     }
 }
@@ -229,7 +214,8 @@ int main(void) {
     Dashboard ui;
     dashboard_init(&ui);
     ui.units_f = load_units();
-    ui.theme_accent = -1;
+    ui.theme_accent = 0;
+    ui.wheel_percent = 50;
     read_theme(&ui);
     (void)read_cache(&ui);
     pid_t service = start_service();
