@@ -10,6 +10,9 @@ typedef struct {
     int slot;
     int day;
     int units_f;
+    int theme_light;
+    int theme_id;
+    int theme_accent;
     int ready;
     int detailed;
     int redraw;
