@@ -52,6 +52,8 @@ void weather_language_parse(const char *data, size_t length) {
         while (pos < length && data[pos] != '\n' && data[pos]) pos++;
         size_t end = pos;
         if (pos < length && data[pos] == '\n') pos++;
+        while (end > begin && (data[end - 1] == '\r' || data[end - 1] == ' '))
+            end--;
         if (begin == end || data[begin] == '#' || data[begin] == ';') continue;
         size_t eq = begin;
         while (eq < end && data[eq] != '=') eq++;
