@@ -13,24 +13,42 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'write' || 'read' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Compile and test
+      - name: Install toolchain
         run: |
-          make clean
-          make check
-      - name: Package development sources
+          sudo apt-get update
+          sudo apt-get install -y clang clang-format lld make gcc libcurl4-openssl-dev \
+            squashfs-tools unzip zip curl xz-utils binutils file
+      - name: Normalize C formatting
         run: |
-          mkdir -p dist/q2-weather-source/src dist/q2-weather-source/tests
-          cp src/weather.c src/weather.h dist/q2-weather-source/src/
-          cp tests/test_weather.c dist/q2-weather-source/tests/
-          cp Makefile README.md dist/q2-weather-source/
-          ( cd dist && zip -qr q2-weather-source.zip q2-weather-source )
-          unzip -t dist/q2-weather-source.zip
+          clang-format -i src/*.c src/*.h tests/*.c
+          clang-format --dry-run --Werror src/*.c src/*.h tests/*.c
+      - name: Push formatting changes
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src tests
+          if ! git diff --cached --quiet; then
+            git commit -m "style: apply clang-format to Q2 Weather"
+            git push origin HEAD:main
+          fi
+      - name: Run host checks
+        run: make check
+      - name: Build Shanling Q2 executable
+        run: |
+          sh tools/sysroot.sh
+          make
+          unzip -t dist/q2-weather.zip
+          unzip -p dist/q2-weather.zip .weather/q2app | grep -Fx 'row=library'
+          file dist/.weather/q2-weather | grep -E 'ELF 32-bit LSB.*MIPS'
       - uses: actions/upload-artifact@v4
         with:
-          name: q2-weather-development-source
-          path: dist/q2-weather-source.zip
+          name: q2-weather-card-app
+          path: dist/q2-weather.zip
           if-no-files-found: error
 
   release:
@@ -42,15 +60,18 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: q2-weather-development-source
+          name: q2-weather-card-app
           path: dist
-      - name: Create prerelease
+      - name: Publish Q2 release ZIP
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" dist/q2-weather-source.zip \
-            --verify-tag --prerelease --generate-notes \
-            --title "$RELEASE_TAG (development sources)" \
-            --notes "Development-only source snapshot. Not installable on Q2; native device networking and UI are not yet implemented."
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/q2-weather.zip --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/q2-weather.zip \
+              --verify-tag --prerelease --generate-notes \
+              --title "$RELEASE_TAG (device test)"
+          fi
