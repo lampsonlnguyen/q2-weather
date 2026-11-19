@@ -56,6 +56,24 @@ make check
 make
 ```
 
+### If a local build reports missing libcurl.so.4
+
+Some older cached sysroots (for example `/home/lam/.cache/q2/sysroot`) have the
+glibc headers but do not include Q2's `libcurl.so.4`. The Makefile now repairs
+this automatically: it first checks `$(SYSROOT)/usr/lib/libcurl.so.4`, then
+extracts the **Q2 MIPS** library from a cached `q2-rootfs.squashfs`.
+This does not replace or rebuild your existing sysroot.
+
+If no Q2 rootfs is available, initialize or repair it once:
+
+```sh
+sh tools/sysroot.sh /home/lam/.cache/q2/sysroot build/q2-rootfs.squashfs
+make
+```
+
+Use your actual `SYSROOT` path. Do not copy the host Ubuntu x86-64 libcurl
+into the MIPS sysroot.
+
 If `build/sysroot` already exists, skip the sysroot command. The Q2 root filesystem is generated from the locally supplied stock firmware or downloaded by the sysroot script. The resulting ZIP is `dist/q2-weather.zip`. **Do not commit stock firmware or the sysroot.**
 
 ## Architecture and power
