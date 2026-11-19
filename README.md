@@ -27,6 +27,10 @@ https://api.open-meteo.com/v1/forecast?latitude=33.77&longitude=-117.94&current=
 
 IP location reflects the internet exit point and may be wrong when using a VPN or carrier network. Manual location selection should always remain available.
 
+## Continuous integration and releases
+
+On pushes to `main` and pull requests, GitHub Actions runs portable C tests and uploads `q2-weather-source.zip`. Version tags (`v*`) publish an explicitly labeled prerelease containing **development sources only**. This is not yet a deployable card app. The workflow will need to be upgraded to cross-build a native Q2 executable before an installable release is possible.
+
 ## Tests
 
 Run `make check` on Linux/WSL/macOS with a C compiler. Tests cover two locations, persistence, current-location lookup, preserving initially enabled Wi-Fi, and restoring initially disabled Wi-Fi when networking, geolocation or weather retrieval fails.
@@ -36,4 +40,4 @@ Run `make check` on Linux/WSL/macOS with a C compiler. Tests cover two locations
 1. Verify actual Wi-Fi API and TLS client on the Shanling Q2 firmware.
 2. Implement Q2 device transport and network-backed adapters for ipwho.is and Open-Meteo.
 3. Add on-device city search and manual coordinate entry, location chooser, refresh action, and weather display using Q2 input conventions.
-4. Package under `.weather/` with an appropriate Q2 Pod SD-card app manifest and GitHub Actions workflow.
+4. Package under `.weather/` with an appropriate Q2 Pod SD-card app manifest and device build. GitHub Actions currently produces development sources only.
