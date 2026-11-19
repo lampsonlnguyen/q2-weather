@@ -151,7 +151,7 @@ int weather_read(WeatherApp *app, const char *data) {
             forecast = enabled;
             if (!enabled) continue;
             if (!used || strlen(date) != 10 || date[4] != '-' || date[7] != '-' ||
-                rain < 0 || rain > 100)
+                rain < -1 || rain > 100)
                 return -1;
             WeatherDay *d = &loc->days[day];
             memcpy(d->date, date, sizeof d->date);
