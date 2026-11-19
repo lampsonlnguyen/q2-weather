@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 #include "dashboard.h"
 #include "art.h"
+#include "http.h"
 
 #include <stdio.h>
 #include <string.h>
