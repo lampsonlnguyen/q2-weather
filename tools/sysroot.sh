@@ -15,7 +15,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 while read -r checksum relative; do
     curl -fsSL --retry 3 "https://archive.debian.org/debian/pool/main/$relative" -o "$tmp/p.deb"
-    printf '%s  %s\n' "$checksum" "$tmp/p.deb" | sha256sum -c --quiet
+    printf '%s  %s\n' "$checksum" "$tmp/p.deb" | sha1sum -c --quiet
     ( cd "$tmp" && ar x p.deb data.tar.xz && tar -xJf data.tar.xz -C "$out" ./usr/include )
     rm -f "$tmp/p.deb" "$tmp/data.tar.xz"
 done <<'PACKAGES'
