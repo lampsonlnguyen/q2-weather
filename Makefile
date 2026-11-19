@@ -8,9 +8,10 @@ Q2_FLAGS = -D_GNU_SOURCE --target=mipsel-linux-gnu --sysroot=$(SYSROOT) \
 Q2_CFLAGS = -std=gnu11 -O2 -Wall -Wextra -Werror -Wno-unused-parameter -fno-strict-aliasing
 Q2_LDFLAGS = -m elf32ltsmip -e __start --dynamic-linker /lib/ld-linux-mipsn8.so.1 \
 	--image-base=0x400000 -z noexecstack --hash-style=sysv --build-id=none -s
-Q2_SRC = src/main.c src/http.c src/weather.c src/crt-q2.c
+Q2_SRC = src/main.c src/http.c src/weather.c src/art.c src/crt-q2.c
 Q2_OBJ = $(patsubst src/%.c,build/q2/%.o,$(Q2_SRC))
 DIST = dist/.weather
+SPRITES = $(addprefix build/icons/,sunny.jpg partly.jpg cloudy.jpg overcast.jpg fog.jpg drizzle.jpg rain.jpg showers.jpg thunder.jpg snow.jpg snowshowers.jpg night.jpg nightcloud.jpg wind.jpg humidity.jpg icon.png icon-40.png)
 
 all: dist/q2-weather.zip
 
@@ -29,6 +30,18 @@ $(DIST)/q2-weather: $(Q2_OBJ)
 		$(SYSROOT)/lib/libgcc_s.so.1 $(SYSROOT)/lib/libcurl.so.4 \
 		$(SYSROOT)/lib/ld-linux-mipsn8.so.1
 
+build/icons/sunny.jpg: tools/draw_weather_icons.py
+	python3 tools/draw_weather_icons.py
+
+$(filter-out build/icons/sunny.jpg,$(SPRITES)): build/icons/sunny.jpg
+	@test -f $@
+
+$(DIST)/icons.stamp: $(SPRITES)
+	mkdir -p $(DIST)/icons
+	cp build/icons/*.jpg $(DIST)/icons/
+	cp build/icons/icon.png build/icons/icon-40.png $(DIST)/
+	@touch $@
+
 $(DIST)/q2app: q2app
 	mkdir -p $(@D)
 	cp $< $@
@@ -38,27 +51,32 @@ $(DIST)/run: run
 	cp $< $@
 	chmod 755 $@
 
-dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/q2app $(DIST)/run
-	cd dist && zip -qX q2-weather.zip .weather/q2-weather .weather/q2app .weather/run
+dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/q2app $(DIST)/run $(DIST)/icons.stamp
+	cd dist && zip -qX q2-weather.zip .weather/q2-weather .weather/q2app .weather/run .weather/icon.png .weather/icon-40.png .weather/icons/*.jpg
 
 build/test_weather: src/weather.c src/weather.h tests/test_weather.c
 	mkdir -p build
 	$(CC) $(CFLAGS) -o $@ src/weather.c tests/test_weather.c -lm
 
-build/host/q2-weather: src/main.c src/http.c src/weather.c src/weather.h src/http.h
+build/host/q2-weather: src/main.c src/http.c src/weather.c src/art.c src/weather.h src/http.h src/art.h
 	mkdir -p build/host
 	$(CC) -std=gnu11 -DHOST -O2 -Wall -Wextra -Werror -o $@ \
-		src/main.c src/http.c src/weather.c -lcurl -lm
+		src/main.c src/http.c src/weather.c src/art.c -lcurl -lm
 
 build/test_http: src/http.c src/http.h tests/test_http.c
 	mkdir -p build
 	$(CC) -std=gnu11 -DHOST -O2 -Wall -Wextra -Werror -o $@ src/http.c tests/test_http.c -lm
 
+build/test_art: src/art.c src/art.h tests/test_art.c
+	mkdir -p build
+	$(CC) -std=gnu11 -DHOST -O2 -Wall -Wextra -Werror -o $@ src/art.c tests/test_art.c
+
 host: build/host/q2-weather
 
-check: build/test_weather build/test_http build/host/q2-weather
+check: build/test_weather build/test_http build/test_art build/host/q2-weather
 	./build/test_weather
 	./build/test_http
+	./build/test_art
 	sh -n run
 
 format:
@@ -69,7 +87,7 @@ format-check:
 
 clean:
 	# Preserve build/sysroot and build/q2-rootfs.squashfs: these are expensive to recreate.
-	rm -rf build/q2 build/host build/test_weather build/test_http dist
+	rm -rf build/q2 build/host build/test_weather build/test_http build/test_art dist
 
 clean-all:
 	rm -rf build dist
