@@ -20,7 +20,7 @@ int main(void) {
     assert(!strcmp(weather_art_icon(-1), "overcast"));
     assert(weather_art_key("location", "0") != weather_art_key("location", "1"));
     assert(weather_art_key("forecast", "0-0") != weather_art_key("forecast", "0-1"));
-    assert(weather_art_key("", "") == 0xA9150229u);
+    assert(weather_art_key("", "") == 0x0c0c6824u);
     weather_art_init();
     weather_art_row("location", "0", 0);
     weather_art_cleanup();
