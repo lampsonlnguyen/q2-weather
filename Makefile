@@ -13,6 +13,8 @@ Q2_OBJ = $(patsubst src/%.c,build/q2/%.o,$(Q2_SRC))
 DASH_SRC = src/dashboard.c src/dashboard_render.c src/dashboard_q2.c src/theme.c src/lang.c src/art.c src/weather.c src/crt-q2.c
 DASH_OBJ = $(patsubst src/%.c,build/dashboard/%.o,$(DASH_SRC))
 DIST = dist/.weather
+LANG_PACKS = $(wildcard assets/lang/*.lang)
+DIST_LANG_PACKS = $(patsubst assets/lang/%.lang,$(DIST)/lang/%.lang,$(LANG_PACKS))
 
 # The Q2 glibc runtime places libcurl in /usr/lib; copied sysroots may
 # instead have it in /lib or omit it entirely. Extract it when needed.
@@ -61,7 +63,7 @@ $(DIST)/q2app: q2app
 	mkdir -p $(@D)
 	cp $< $@
 
-$(DIST)/lang/0.lang: assets/lang/0.lang
+$(DIST)/lang/%.lang: assets/lang/%.lang
 	mkdir -p $(@D)
 	cp $< $@
 
@@ -69,8 +71,8 @@ $(DIST)/icon.png: build/icons/icon.png
 	mkdir -p $(@D)
 	cp $< $@
 
-dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/q2-weather-service $(DIST)/q2app $(DIST)/icon.png $(DIST)/lang/0.lang
-	cd dist && zip -qX q2-weather.zip .weather/q2-weather .weather/q2-weather-service .weather/q2app .weather/icon.png .weather/lang/0.lang
+dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/q2-weather-service $(DIST)/q2app $(DIST)/icon.png $(DIST_LANG_PACKS)
+	cd dist && zip -qX q2-weather.zip .weather/q2-weather .weather/q2-weather-service .weather/q2app .weather/icon.png .weather/lang/*.lang
 
 build/test_weather: src/weather.c src/weather.h tests/test_weather.c
 	mkdir -p build
