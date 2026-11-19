@@ -14,6 +14,11 @@ DASH_SRC = src/dashboard.c src/dashboard_render.c src/dashboard_q2.c src/art.c s
 DASH_OBJ = $(patsubst src/%.c,build/dashboard/%.o,$(DASH_SRC))
 DIST = dist/.weather
 
+# The Q2 glibc runtime places libcurl in /usr/lib; copied sysroots may
+# instead have it in /lib or omit it entirely. Extract it when needed.
+Q2_CURL = $(SYSROOT)/lib/libcurl.so.4
+Q2_ROOTFS ?= build/q2-rootfs.squashfs
+
 all: dist/q2-weather.zip
 
 $(SYSROOT)/usr/include/errno.h:
@@ -36,11 +41,14 @@ build/dashboard/%.o: src/%.c src/dashboard.h src/weather.h src/art.h | $(SYSROOT
 	mkdir -p $(@D)
 	$(Q2_CC) $(Q2_FLAGS) $(Q2_CFLAGS) -Ibuild -c $< -o $@
 
-$(DIST)/q2-weather-service: $(Q2_OBJ)
+$(Q2_CURL):
+	sh tools/repair-libcurl.sh "$(SYSROOT)" "$(Q2_ROOTFS)"
+
+$(DIST)/q2-weather-service: $(Q2_OBJ) $(Q2_CURL)
 	mkdir -p $(@D)
-	$(Q2_LD) $(Q2_LDFLAGS) -o $@ $^ $(SYSROOT)/lib/libc.so.6 \
+	$(Q2_LD) $(Q2_LDFLAGS) -o $@ $(Q2_OBJ) $(SYSROOT)/lib/libc.so.6 \
 		$(SYSROOT)/lib/libm.so.6 $(SYSROOT)/lib/libpthread.so.0 \
-		$(SYSROOT)/lib/libgcc_s.so.1 $(SYSROOT)/lib/libcurl.so.4 \
+		$(SYSROOT)/lib/libgcc_s.so.1 $(Q2_CURL) \
 		$(SYSROOT)/lib/ld-linux-mipsn8.so.1
 
 $(DIST)/q2-weather: $(DASH_OBJ)
