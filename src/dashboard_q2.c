@@ -90,12 +90,15 @@ static int service_command(const char *op, const char *arg, char *response, size
     }
     shutdown(fd, SHUT_WR);
     if (response && cap > 1) {
-        ssize_t got = recv(fd, response, cap - 1, 0);
-        if (got < 1) {
+        size_t used = 0;
+        ssize_t got;
+        while (used + 1 < cap && (got = recv(fd, response + used, cap - used - 1, 0)) > 0)
+            used += (size_t)got;
+        if (!used) {
             close(fd);
             return -1;
         }
-        response[got] = 0;
+        response[used] = 0;
     }
     close(fd);
     return 0;
