@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Generated 24x24 pixels and an 8x12 bitmap font. No runtime decoding. */
+/* Replaceable PNG sprite atlas and antialiased sans-serif glyphs, packed at build time. */
 #include "weather_sprites.inc"
 
 /* Separate high-contrast palettes; Q2 settings determine the active half.
@@ -251,18 +251,19 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
     else
         label(dst, stride, 279, 12, "Q2 POD", 1, DIM, 8);
     if (ui->page == 3) {
-        label(dst, stride, 40, 47, "SEARCH CITY", 2, TEXT, 20);
-        label(dst, stride, 14, 67, ui->city_query, 1, HIGHLIGHT, 40);
-        const char *keys = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _<+";
-        for (int i = 0; keys[i]; ++i) {
-            int x = 14 + (i % 6) * 58, y = 80 + (i / 6) * 32;
-            rect(dst, stride, x, y, 53, 29, ui->keyboard_index == i ? PANEL_LIGHT : PANEL);
-            frame(dst, stride, x, y, 53, 29, ui->keyboard_index == i ? HIGHLIGHT : BORDER);
-            char letter[2] = {keys[i], 0};
-            if (letter[0] == '_') letter[0] = ' ';
-            label(dst, stride, x + 20, y + 7, letter, 1, TEXT, 1);
+        label(dst, stride, 43, 56, "SEARCH CITY", 2, TEXT, 20);
+        rect(dst, stride, 34, 111, 307, 107, PANEL);
+        frame(dst, stride, 34, 111, 307, 107, BORDER);
+        if (ui->native_keyboard) {
+            label(dst, stride, 48, 127, "SYSTEM KEYBOARD", 1, HIGHLIGHT, 30);
+            label(dst, stride, 48, 157, "Type your city with Q2 Pod", 1, TEXT, 36);
+            label(dst, stride, 48, 182, "Press Done to search", 1, DIM, 34);
+        } else {
+            label(dst, stride, 48, 126, "NATIVE KEYBOARD UNAVAILABLE", 1, GOLD, 36);
+            label(dst, stride, 48, 158, "Update Q2 Pod firmware", 1, TEXT, 32);
+            label(dst, stride, 48, 181, "to enable system text input", 1, DIM, 36);
         }
-        label(dst, stride, 40, 289, "< BACKSPACE  + SEARCH", 1, DIM, 32);
+        label(dst, stride, 42, 287, "BACK  LOCATIONS AND SETTINGS", 1, DIM, 35);
         return;
     }
     if (ui->page == 2) {
