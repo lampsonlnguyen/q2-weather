@@ -77,7 +77,7 @@ jobs:
               --title "$RELEASE_TAG (device test)"
           fi
 
-  publish_weather_v052:
+  publish_weather_v060:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-24.04
@@ -88,17 +88,17 @@ jobs:
         with:
           name: q2-weather-card-app
           path: dist
-      - name: Publish v0.5.2 stable Weather package
+      - name: Publish v0.6.0 Weather integration beta
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TARGET_SHA: ${{ github.sha }}
         run: |
-          if gh release view v0.5.2 >/dev/null 2>&1; then
-            echo 'v0.5.2 already exists; leaving published version unchanged'
+          if gh release view v0.6.0 >/dev/null 2>&1; then
+            echo 'v0.6.0 already exists; leaving published version unchanged'
             exit 0
           fi
-          gh release create v0.5.2 dist/q2-weather.zip \
+          gh release create v0.6.0 dist/q2-weather.zip \
             --target "$TARGET_SHA" \
-            --title "Q2 Weather v0.5.2 — Location-first Weather" \
-            --notes "Replaceable, high-quality color weather artwork adapted from Tomorrow.io Weather Code Icons (CC BY 4.0) with attribution in assets/sprites/ATTRIBUTION.md and the Settings screen. Keeps the single location-first Weather app, Q2 theme-aware contrast, sans-serif text and offline forecast. Original Icons8 assets are not included because they require separate redistribution permission. Install ZIP over the .weather folder; delete legacy .weather-view if it remains on SD."
+            --title "Q2 Weather v0.6.0 beta — iPod UI and native keyboard integration" \
+            --notes "Beta: Q2 system themes (Minimal/Classic/Modern and their accents), iPod-inspired contrast, centered header, rounded-screen-safe layout, system wheel sensitivity and editable language packs. Removes custom keyboard and uses firmware native T9 via a Weather-specific handoff. Smart Wi-Fi wake/idle integration is in lampsonlnguyen/q2-pod main, which must be built and installed separately; existing Q2 Pod firmware will show an update prompt for city entry. Single Library Weather app, no extra graphics runtime. Hardware validation of the firmware bridge is still required."
