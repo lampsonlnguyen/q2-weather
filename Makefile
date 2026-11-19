@@ -63,6 +63,10 @@ format-check:
 	clang-format --dry-run --Werror src/*.c src/*.h tests/*.c
 
 clean:
+	# Preserve build/sysroot and build/q2-rootfs.squashfs: these are expensive to recreate.
+	rm -rf build/q2 build/host build/test_weather dist
+
+clean-all:
 	rm -rf build dist
 
-.PHONY: all check format format-check clean host
+.PHONY: all check format format-check clean clean-all host
