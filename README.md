@@ -2,6 +2,14 @@
 
 An SD-card Library app for the Shanling Q2 running [DiamondBond's Q2 Pod](https://github.com/DiamondBond/q2-pod), using its native card-app browser. Current observations and seven days of weather for two locations.
 
+## Full graphical dashboard (v0.3.0)
+
+Open **Library → Weather Dashboard** to see the new lightweight full-screen graphical view. It draws a dark themed dashboard with current and saved city cards, large pixel weather art, and seven selectable forecast days. Turn the Q2 wheel to select a day; press Centre for its high/low/rain detail and Return to go back or exit. Tap a location card to change the active city or tap a day to open its forecast. Music playback controls remain with Q2 Pod.
+
+The original **Library → Weather** text/art interface remains available for city search, manual updates, unit selection and troubleshooting. Both applications share the same `.weather/state` file. The graphical view starts the background weather service when necessary and reads its cache once per second; **it only redraws the framebuffer when the cache or input changes**, not on every poll. The graphics and bitmap font are compiled from build-time image generation (no SDL, game sound, animations, runtime image decoding or external font files).
+
+The ZIP installs both `.weather` and `.weather-view` at the microSD root. Do not delete the `.weather/state` file during an upgrade. The screen and input path follow Q2 Pod's native full-screen game handoff, but the dashboard is explicitly placed in Library (`game=1`, `row=library`). Physical Q2 validation is required before treating the graphics interface as fully verified.
+
 ## Weather artwork (v0.2.0)
 
 The Library app displays original pixel-weather artwork beside both location rows and each of the seven forecast days. This uses **Q2 Pod's native JPEG art-row feature**, not a custom framebuffer or game UI. It preserves Q2 Pod's theme, wheel scroll, Return button, city-entry keyboard, and background music. Q2 Pod's art rows require a firmware version supporting the `art` capability; older versions continue to show the text-only interface.
@@ -30,6 +38,8 @@ Public-IP geolocation is approximate and can show a nearby or different city, es
    - `.weather/q2app`
    - `.weather/run`
    - `.weather/q2-weather`
+   - `.weather-view/q2app`
+   - `.weather-view/q2-weather-view`
 3. Insert the card in the Q2 running a recent Q2 Pod release with Library card-app support (Q2 Pod **1.8.7 or later**).
 4. Open **Library → Weather**. The first screen starts a background refresh for both locations.
 5. Choose **Saved Location → Change saved city**, type the city, then select the search result. Return to Weather to see the new forecast.
@@ -61,7 +71,8 @@ GitHub Actions runs clang-format automatically, host regression tests, the MIPS 
 
 - `src/main.c`: Q2SPOT/1 Unix socket server, Library menu pages, on-device location selection, asynchronous refresh, art-row hooks and SD-card persistence.
 - `src/art.c`: lightweight weather-code mapping and Q2 Pod native art-row JPEG integration.
-- `tools/draw_weather_icons.py`: generates original 96-pixel weather icons and launcher PNG at build time. No on-device Python or PNG decoder.
+- `tools/draw_weather_icons.py`: generates original 96-pixel weather icons, 24-pixel C sprite atlas, and bitmap font at build time. No on-device Python or PNG decoder.
+- `src/dashboard.c`, `src/dashboard_render.c`, `src/dashboard_q2.c`: event-driven full-screen view, sprite renderer and native framebuffer/touch/wheel platform.
 - `src/http.c`: HTTPS with Q2's stock libcurl, ipwho.is geolocation, Open-Meteo geocoding and weather data.
 - `src/weather.c`: portable two-location application state, Wi-Fi ownership callbacks and versioned forecast cache serialization.
 - `src/crt-q2.c`: Q2 glibc startup shim, from [DiamondBond/q2-mixtape](https://github.com/DiamondBond/q2-mixtape), GPL-2.0-or-later.
