@@ -4,8 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char keys[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _<+";
-
 static void open_location(Dashboard *ui) {
     ui->day = 0;
     ui->wheel_rem = 0;
@@ -33,23 +31,6 @@ static void back(Dashboard *ui) {
     ui->wheel_rem = 0;
 }
 
-static void select_key(Dashboard *ui) {
-    char key = keys[ui->keyboard_index];
-    if (key == '+') {
-        if (ui->city_length) {
-            ui->search_request = 1;
-            ui->search_result = 1;
-            ui->page = 2;
-            ui->keyboard_index = 0;
-        }
-    } else if (key == '<') {
-        if (ui->city_length) ui->city_query[--ui->city_length] = 0;
-    } else if (ui->city_length < (int)sizeof ui->city_query - 1) {
-        ui->city_query[ui->city_length++] = key == '_' ? ' ' : key;
-        ui->city_query[ui->city_length] = 0;
-    }
-}
-
 static void settings_action(Dashboard *ui) {
     switch (ui->keyboard_index) {
     case 0:
@@ -73,11 +54,28 @@ static void settings_action(Dashboard *ui) {
 void dashboard_init(Dashboard *ui) {
     memset(ui, 0, sizeof *ui);
     ui->redraw = 1;
+    ui->wheel_percent = 50;
 }
 
 int dashboard_input(Dashboard *ui, const char *event) {
     if (!ui || !event) return 0;
+    /* Native Q2 firmware IM sends 's <UTF-8 city>' when Done is pressed. */
+    if (ui->page == 3 && event[0] == 's' && event[1] == ' ') {
+        const char *city = event + 2;
+        size_t n = strlen(city);
+        if (n > 0 && n < sizeof ui->city_query) {
+            memcpy(ui->city_query, city, n + 1);
+            ui->city_length = (int)n;
+            ui->search_request = 1;
+            ui->search_result = 1;
+        }
+        ui->page = 2;
+        ui->keyboard_index = 0;
+        ui->redraw = 1;
+        return 1;
+    }
     int wheel;
+    if (ui->page == 3 && sscanf(event, "w %d", &wheel) == 1) return 0;
     if (sscanf(event, "w %d", &wheel) == 1) {
         ui->wheel_rem += wheel;
         int changed = 0;
@@ -86,14 +84,17 @@ int dashboard_input(Dashboard *ui, const char *event) {
                          &ui->keyboard_index;
         int max = ui->page == 0 ? 1 :
                   ui->page == 2 ? 3 :
-                  ui->page == 3 ? (int)strlen(keys) - 1 :
+                  ui->page == 3 ? 0 :
                   Q2_FORECAST_DAYS - 1;
-        while (ui->wheel_rem >= 28) {
-            ui->wheel_rem -= 28;
+        int step = 1400 / (ui->wheel_percent >= 10 ? ui->wheel_percent : 50);
+        if (step < 8) step = 8;
+        if (step > 140) step = 140;
+        while (ui->wheel_rem >= step) {
+            ui->wheel_rem -= step;
             if (*selection < max) (*selection)++, changed = 1;
         }
-        while (ui->wheel_rem <= -28) {
-            ui->wheel_rem += 28;
+        while (ui->wheel_rem <= -step) {
+            ui->wheel_rem += step;
             if (*selection > 0) (*selection)--, changed = 1;
         }
         if (changed) ui->redraw = 1;
@@ -105,7 +106,7 @@ int dashboard_input(Dashboard *ui, const char *event) {
             back(ui);
         } else if (code == 218) {
             if (ui->page == 3)
-                select_key(ui);
+                return 0; /* Q2 Pod owns the native keyboard. */
             else if (ui->page == 2)
                 settings_action(ui);
             else if (ui->page == 0)
@@ -130,14 +131,7 @@ int dashboard_input(Dashboard *ui, const char *event) {
         if (y < 42 && x < 85) {
             back(ui);
         } else if (ui->page == 3) {
-            int col = (x - 14) / 58;
-            int row = (y - 80) / 32;
-            int idx = row * 6 + col;
-            if (x < 14 || col < 0 || col >= 6 || y < 80 || row < 0 ||
-                idx >= (int)strlen(keys))
-                return 0;
-            ui->keyboard_index = idx;
-            select_key(ui);
+            return 0; /* Device keyboard events are handled by Q2 Pod. */
         } else if (ui->page == 2) {
             int idx = (y - 76) / 48;
             if (y < 76 || idx < 0 || idx >= 4) return 0;
@@ -152,8 +146,8 @@ int dashboard_input(Dashboard *ui, const char *event) {
             else return 0;
             open_location(ui);
         } else if (ui->page == 1 && y >= 209 && y <= 283) {
-            int idx = (x - 14) / 50;
-            if (x < 14 || idx < 0 || idx >= Q2_FORECAST_DAYS) return 0;
+            int idx = (x - 31) / 45;
+            if (x < 31 || idx < 0 || idx >= Q2_FORECAST_DAYS) return 0;
             ui->day = idx;
             ui->page = 4;
             ui->detailed = 1;
