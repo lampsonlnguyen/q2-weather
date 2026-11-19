@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <errno.h>
 
 /* Link to Q2 Pod's own libcurl; values are from curl/curl.h. */
 void *curl_easy_init(void);
@@ -14,6 +15,23 @@ int curl_easy_setopt(void *, int, ...);
 int curl_easy_perform(void *);
 int curl_easy_getinfo(void *, int, ...);
 void curl_easy_cleanup(void *);
+
+/* Diagnostics are deliberately short and contain no API credentials. */
+static __thread char error_text[160];
+
+const char *weather_http_error(void) { return error_text; }
+
+void weather_log(const char *category, const char *detail) {
+#ifndef HOST
+    FILE *f = fopen("/mnt/mmc/.weather/weather.log", "ab");
+#else
+    FILE *f = fopen("build/weather.log", "ab");
+#endif
+    if (!f) return;
+    time_t now = time(NULL);
+    fprintf(f, "%ld %s: %.160s\n", (long)now, category, detail ? detail : "");
+    fclose(f);
+}
 
 typedef struct {
     char *buf;
@@ -51,8 +69,21 @@ int http_get(const char *url, char *body, size_t capacity) {
     curl_easy_setopt(curl, 64, 1L); /* SSL_VERIFYPEER */
     curl_easy_setopt(curl, 81, 2L); /* SSL_VERIFYHOST */
     long status = 0;
-    int ok = !curl_easy_perform(curl) && !curl_easy_getinfo(curl, 0x200002, &status) &&
-             status == 200 && r.used;
+    int result = curl_easy_perform(curl);
+    if (!result) (void)curl_easy_getinfo(curl, 0x200002, &status);
+    int ok = result == 0 && status == 200 && r.used;
+    if (!ok) {
+        const char *endpoint = strstr(url, "api.open-meteo.com")
+                                   ? "open-meteo forecast"
+                                   : strstr(url, "geocoding-api.open-meteo.com")
+                                         ? "open-meteo geocoding"
+                                         : "ipwho.is";
+        snprintf(error_text, sizeof error_text, "%s: curl=%d HTTP=%ld bytes=%zu", endpoint,
+                 result, status, r.used);
+        weather_log("HTTP", error_text);
+    } else {
+        error_text[0] = 0;
+    }
     curl_easy_cleanup(curl);
     return ok ? 0 : -1;
 }
@@ -103,6 +134,13 @@ static int number_array(const char *json, const char *key, int *out, int count) 
     if (!p || *p++ != '[') return -1;
     for (int i = 0; i < count; i++) {
         while (isspace((unsigned char)*p)) p++;
+        if (!strncmp(p, "null", 4)) {
+            out[i] = -1;
+            p += 4;
+            while (isspace((unsigned char)*p)) p++;
+            if (*p++ != (i + 1 == count ? ']' : ',')) return -1;
+            continue;
+        }
         char *end = NULL;
         double v = strtod(p, &end);
         if (end == p || !isfinite(v) || v < -200 || v > 1000) return -1;
@@ -190,21 +228,32 @@ int weather_request(double lat, double lon, int *temp, int *humidity, int *code,
     if (http_get(url, body, sizeof body)) return -1;
     const char *current = key_at(body, "current");
     const char *daily = key_at(body, "daily");
-    if (!current || !daily || *current != '{' || *daily != '{' || current >= daily) return -1;
+    if (!current || *current != '{') {
+        weather_log("PARSE", "Open-Meteo response missing current object");
+        return -1;
+    }
     double t, h, w;
     if (value_number(current, "temperature_2m", &t) ||
         value_number(current, "relative_humidity_2m", &h) ||
-        value_number(current, "weather_code", &w) ||
-        date_array(daily, dates, day_count) ||
-        number_array(daily, "temperature_2m_max", highs, day_count) ||
-        number_array(daily, "temperature_2m_min", lows, day_count) ||
-        number_array(daily, "precipitation_probability_max", precip, day_count) ||
-        number_array(daily, "weather_code", codes, day_count))
+        value_number(current, "weather_code", &w)) {
+        weather_log("PARSE", "Open-Meteo current temperature/humidity/weather_code invalid");
         return -1;
+    }
     *temp = (int)lround(t);
     *humidity = (int)lround(h);
     *code = (int)lround(w);
     *updated = (long)time(NULL);
+    if (!daily || *daily != '{' || date_array(daily, dates, day_count) ||
+        number_array(daily, "temperature_2m_max", highs, day_count) ||
+        number_array(daily, "temperature_2m_min", lows, day_count) ||
+        number_array(daily, "weather_code", codes, day_count)) {
+        weather_log("PARSE", "Open-Meteo daily forecast missing or invalid");
+        return 1; /* Current readings are still usable. */
+    }
+    if (number_array(daily, "precipitation_probability_max", precip, day_count)) {
+        weather_log("PARSE", "Open-Meteo precipitation probabilities unavailable");
+        for (int i = 0; i < day_count; i++) precip[i] = -1;
+    }
     return 0;
 }
 
