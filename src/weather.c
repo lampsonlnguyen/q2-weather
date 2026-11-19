@@ -28,7 +28,11 @@ int weather_refresh(WeatherApp *app,const WeatherBackend *backend,int detect_cur
     if(initially_on<0)return WEATHER_RADIO;
     int ours=0, result=WEATHER_OK;
     if(!initially_on){
-        if(backend->set_wifi(backend->ctx,1))return WEATHER_RADIO;
+        if(backend->set_wifi(backend->ctx,1)) {
+            /* A failed enable may still leave the interface powered on. */
+            (void)backend->set_wifi(backend->ctx,0);
+            return WEATHER_RADIO;
+        }
         ours=1;
     }
     if(backend->wait_online(backend->ctx,25)) {result=WEATHER_OFFLINE;goto done;}
@@ -37,7 +41,8 @@ int weather_refresh(WeatherApp *app,const WeatherBackend *backend,int detect_cur
         double lat=0,lon=0;
         if(backend->detect_location(backend->ctx,name,sizeof(name),&lat,&lon)||
            weather_set_location(app,0,name,lat,lon)) {
-            result=WEATHER_GEO;goto done;
+            /* A location service outage must not block the saved city. */
+            result=WEATHER_GEO;
         }
     }
     for(int i=0;i<Q2_WEATHER_SLOTS;i++) {
