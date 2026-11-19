@@ -14,7 +14,11 @@ DIST = dist/.weather
 
 all: dist/q2-weather.zip
 
-build/q2/%.o: src/%.c src/weather.h src/http.h
+$(SYSROOT)/usr/include/errno.h:
+	@echo 'Q2 sysroot not initialized. Run: sh tools/sysroot.sh' >&2
+	@exit 1
+
+build/q2/%.o: src/%.c src/weather.h src/http.h | $(SYSROOT)/usr/include/errno.h
 	mkdir -p $(@D)
 	$(Q2_CC) $(Q2_FLAGS) $(Q2_CFLAGS) -c $< -o $@
 
