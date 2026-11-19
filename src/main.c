@@ -399,11 +399,12 @@ static void page_menu(Reply *r) {
 
 static void page_cities(Reply *r) {
     char name[Q2_WEATHER_NAME], coord[80];
-    int pending, found;
+    int pending, found, searched;
     double lat, lon;
     pthread_mutex_lock(&state_mutex);
     pending = rt.search_pending;
     found = rt.search_found;
+    searched = rt.search[0] != 0;
     snprintf(name, sizeof name, "%s", rt.search_name);
     lat = rt.search_lat;
     lon = rt.search_lon;
@@ -415,6 +416,8 @@ static void page_cities(Reply *r) {
     } else if (found) {
         snprintf(coord, sizeof coord, "%.6f %.6f", lat, lon);
         row(r, "action", "savecity", name, "Save this city", coord);
+    } else if (searched) {
+        info(r, "No city found", "Check spelling or Wi-Fi and search again");
     }
 }
 
