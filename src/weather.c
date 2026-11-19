@@ -52,6 +52,13 @@ int weather_refresh(WeatherApp *app,const WeatherBackend *backend,int detect_cur
         }
         l->temperature_c=temp;l->humidity=humidity;l->weather_code=code;
         l->updated_at=timestamp;l->valid=1;
+        if(backend->get_forecast){
+            WeatherDay days[Q2_FORECAST_DAYS]={{0}};
+            if(!backend->get_forecast(backend->ctx,l->latitude,l->longitude,days,Q2_FORECAST_DAYS)){
+                memcpy(l->days,days,sizeof(days));
+                l->forecast_valid=1;
+            } else if(result==WEATHER_OK) result=WEATHER_FETCH;
+        }
     }
 done:
     /* Restore the power state only if this app switched Wi-Fi on. */
