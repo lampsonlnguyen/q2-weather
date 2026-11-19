@@ -24,7 +24,7 @@ while read -r checksum relative; do
     rm -f "$tmp/p.deb" "$tmp/data.tar.xz"
 done <<'PACKAGES'
 e28bac8637e98d78045f0fd05613ed2ab298fb1aa6387633b6d609119774d590 g/glibc/libc6-dev_2.28-10+deb10u1_mipsel.deb
-5f6ca1c34bb326b38b1ed051c33a2591bf7bfa26276e54fc85c00427c l/linux/linux-libc-dev_4.19.249-2_mipsel.deb
+5f6ca1c34bb326b38fa44838b1ed051c33a2591bf7bfa26276e54fc85c00427c l/linux/linux-libc-dev_4.19.249-2_mipsel.deb
 PACKAGES
 cp "$out/usr/include/mipsel-linux-gnu/gnu/stubs-o32_hard.h" \
     "$out/usr/include/mipsel-linux-gnu/gnu/stubs-o32_hard_2008.h"
