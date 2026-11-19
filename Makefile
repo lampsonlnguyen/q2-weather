@@ -50,10 +50,15 @@ build/host/q2-weather: src/main.c src/http.c src/weather.c src/weather.h src/htt
 	$(CC) -std=gnu11 -DHOST -O2 -Wall -Wextra -Werror -o $@ \
 		src/main.c src/http.c src/weather.c -lcurl -lm
 
+build/test_http: src/http.c src/http.h tests/test_http.c
+	mkdir -p build
+	$(CC) -std=gnu11 -DHOST -O2 -Wall -Wextra -Werror -o $@ src/http.c tests/test_http.c -lm
+
 host: build/host/q2-weather
 
-check: build/test_weather build/host/q2-weather
+check: build/test_weather build/test_http build/host/q2-weather
 	./build/test_weather
+	./build/test_http
 	sh -n run
 
 format:
@@ -64,7 +69,7 @@ format-check:
 
 clean:
 	# Preserve build/sysroot and build/q2-rootfs.squashfs: these are expensive to recreate.
-	rm -rf build/q2 build/host build/test_weather dist
+	rm -rf build/q2 build/host build/test_weather build/test_http dist
 
 clean-all:
 	rm -rf build dist
