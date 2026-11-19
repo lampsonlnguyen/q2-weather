@@ -1,0 +1,29 @@
+/* SPDX-License-Identifier: MIT */
+#ifndef Q2_WEATHER_H
+#define Q2_WEATHER_H
+#include <stddef.h>
+#define Q2_WEATHER_SLOTS 3
+#define Q2_WEATHER_NAME 64
+typedef struct {
+    char name[Q2_WEATHER_NAME];
+    double latitude, longitude;
+    int used, valid, temperature_c, humidity, weather_code;
+    long updated_at;
+} WeatherLocation;
+typedef struct { WeatherLocation locations[Q2_WEATHER_SLOTS]; } WeatherApp;
+typedef struct {
+    void *ctx;
+    /* Radio state: 0 off, 1 on, negative error. */
+    int (*wifi_state)(void *);
+    int (*set_wifi)(void *, int);
+    int (*wait_online)(void *, int seconds);
+    int (*detect_location)(void *,char *name,size_t cap,double *lat,double *lon);
+    int (*get_weather)(void *,double lat,double lon,int *temp,int *humidity,int *code,long *timestamp);
+} WeatherBackend;
+enum { WEATHER_OK=0, WEATHER_INVALID=-1, WEATHER_RADIO=-2, WEATHER_OFFLINE=-3, WEATHER_GEO=-4, WEATHER_FETCH=-5 };
+void weather_init(WeatherApp *);
+int weather_set_location(WeatherApp *,int slot,const char *name,double lat,double lon);
+int weather_refresh(WeatherApp *,const WeatherBackend *,int detect_current);
+int weather_write(const WeatherApp *,char *,size_t);
+int weather_read(WeatherApp *,const char *);
+#endif
