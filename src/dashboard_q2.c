@@ -231,15 +231,17 @@ int main(void) {
     unsigned shown = front;
     unsigned long last_poll = 0;
     unsigned long last_service_check = 0;
-    int initial_refresh = 0;
+    int initial_refresh = service > 0; /* Newly launched helper refreshes itself. */
     int last_units = ui.units_f;
     while (!interrupted && !ui.quit) {
         unsigned long now = now_ms();
         if (now - last_service_check >= 10000) {
             if (!connected_service()) {
                 pid_t restarted = start_service();
-                if (restarted > 0) service = restarted;
-                initial_refresh = 0;
+                if (restarted > 0) {
+                    service = restarted;
+                    initial_refresh = 1;
+                }
             }
             last_service_check = now;
         }
