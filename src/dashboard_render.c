@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: MIT */
 #include "dashboard.h"
 #include "art.h"
+#include "lang.h"
+#define TR(name) weather_text(WX_##name)
 
 #include <stdio.h>
 #include <string.h>
@@ -119,17 +121,17 @@ static void label(uint32_t *dst, unsigned stride, int x, int y, const char *s, i
 }
 
 static const char *condition(int code) {
-    if (code == 0) return "Clear";
-    if (code <= 2 && code >= 1) return "Partly cloudy";
-    if (code == 3) return "Cloudy";
-    if (code == 45 || code == 48) return "Fog";
-    if (code >= 51 && code <= 57) return "Drizzle";
-    if (code >= 61 && code <= 67) return "Rain";
-    if (code >= 71 && code <= 77) return "Snow";
-    if (code >= 80 && code <= 82) return "Showers";
-    if (code >= 85 && code <= 86) return "Snow showers";
-    if (code >= 95) return "Thunderstorm";
-    return "Cloudy";
+    if (code == 0) return TR(CLEAR);
+    if (code <= 2 && code >= 1) return TR(PARTLY_CLOUDY);
+    if (code == 3) return TR(CLOUDY);
+    if (code == 45 || code == 48) return TR(FOG);
+    if (code >= 51 && code <= 57) return TR(DRIZZLE);
+    if (code >= 61 && code <= 67) return TR(RAIN);
+    if (code >= 71 && code <= 77) return TR(SNOW);
+    if (code >= 80 && code <= 82) return TR(SHOWERS);
+    if (code >= 85 && code <= 86) return TR(SNOW_SHOWERS);
+    if (code >= 95) return TR(THUNDERSTORM);
+    return TR(CLOUDY);
 }
 
 static int icon_index(int code) {
@@ -169,9 +171,9 @@ static void location(uint32_t *dst, unsigned stride, const Dashboard *ui, int sl
     uint32_t fill = slot == ui->slot ? PANEL_LIGHT : PANEL;
     rect(dst, stride, 31, y, 196, height, fill);
     frame(dst, stride, 31, y, 196, height, slot == ui->slot ? HIGHLIGHT : BORDER);
-    label(dst, stride, 43, y + 5, slot ? "SAVED LOCATION" : "CURRENT LOCATION", 1, DIM, 18);
+    label(dst, stride, 43, y + 5, slot ? TR(SAVED_LOCATION) : TR(CURRENT_LOCATION), 1, DIM, 18);
     if (!loc->used) {
-        label(dst, stride, 43, y + 31, slot ? "No saved city" : "Finding location",
+        label(dst, stride, 43, y + 31, slot ? TR(ADD_CITY) : TR(FINDING_LOCATION),
               1, TEXT, 24);
         return;
     }
@@ -181,10 +183,10 @@ static void location(uint32_t *dst, unsigned stride, const Dashboard *ui, int sl
         snprintf(temp, sizeof temp, "%d%c", units(loc->temperature_c, ui->units_f),
                  ui->units_f ? 'F' : 'C');
         label(dst, stride, 43, y + 36, temp, 2, TEXT, 9);
-        snprintf(caption, sizeof caption, "Humidity %d%%", loc->humidity);
+        snprintf(caption, sizeof caption, "%s %d%%", TR(HUMIDITY), loc->humidity);
         label(dst, stride, 111, y + height - 23, caption, 1, DIM, 14);
     } else {
-        label(dst, stride, 43, y + 39, "No weather yet", 1, DIM, 21);
+        label(dst, stride, 43, y + 39, TR(LOADING), 1, DIM, 21);
     }
 }
 
@@ -195,7 +197,7 @@ static void location_choice(uint32_t *dst, unsigned stride, const Dashboard *ui,
     uint32_t fill = slot == ui->slot ? PANEL_LIGHT : PANEL;
     rect(dst, stride, 31, y, 313, 90, fill);
     frame(dst, stride, 31, y, 313, 90, slot == ui->slot ? HIGHLIGHT : BORDER);
-    label(dst, stride, 43, y + 6, slot ? "SAVED LOCATION" : "CURRENT LOCATION", 1,
+    label(dst, stride, 43, y + 6, slot ? TR(SAVED_LOCATION) : TR(CURRENT_LOCATION), 1,
           DIM, 21);
     if (loc->used) {
         label(dst, stride, 43, y + 27, loc->name, 2, TEXT, 25);
@@ -206,19 +208,19 @@ static void location_choice(uint32_t *dst, unsigned stride, const Dashboard *ui,
             label(dst, stride, 43, y + 64, details, 1, DIM, 28);
             icon(dst, stride, 279, y + 20, loc->weather_code, 2);
         } else {
-            label(dst, stride, 43, y + 64, "Loading weather...", 1, DIM, 26);
+            label(dst, stride, 43, y + 64, TR(LOADING), 1, DIM, 26);
         }
     } else {
         label(dst, stride, 43, y + 31,
-              slot ? "Add saved city" : "Locating...", 2, TEXT, 20);
+              slot ? TR(ADD_CITY) : TR(FINDING_LOCATION), 2, TEXT, 20);
         label(dst, stride, 43, y + 64,
-              slot ? "Choose a city to track" : "Waiting for location", 1, DIM, 29);
+              slot ? TR(CHOOSE_CITY) : TR(WAITING_LOCATION), 1, DIM, 29);
     }
 }
 
 static void forecast(uint32_t *dst, unsigned stride, const Dashboard *ui) {
     const WeatherLocation *loc = &ui->weather.locations[ui->slot];
-    label(dst, stride, 33, 191, "7-DAY FORECAST", 1, TEXT, 20);
+    label(dst, stride, 33, 191, TR(FORECAST), 1, TEXT, 20);
     for (int i = 0; i < Q2_FORECAST_DAYS; i++) {
         int x = 31 + i * 45;
         uint32_t fill = i == ui->day ? PANEL_LIGHT : PANEL;
@@ -247,28 +249,28 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
     if (ui->page) label(dst, stride, 43, 12, "< BACK", 1, TEXT, 9);
     label(dst, stride, 157, 12, "WEATHER", 1, TEXT, 9);
     if (ui->page == 0)
-        label(dst, stride, 276, 12, "SETTINGS", 1, HIGHLIGHT, 8);
+        label(dst, stride, 276, 12, TR(SETTINGS), 1, HIGHLIGHT, 8);
     else
         label(dst, stride, 279, 12, "Q2 POD", 1, DIM, 8);
     if (ui->page == 3) {
-        label(dst, stride, 43, 56, "SEARCH CITY", 2, TEXT, 20);
+        label(dst, stride, 43, 56, TR(SEARCH_CITY), 2, TEXT, 20);
         rect(dst, stride, 34, 111, 307, 107, PANEL);
         frame(dst, stride, 34, 111, 307, 107, BORDER);
         if (ui->native_keyboard) {
-            label(dst, stride, 48, 127, "SYSTEM KEYBOARD", 1, HIGHLIGHT, 30);
-            label(dst, stride, 48, 157, "Type your city with Q2 Pod", 1, TEXT, 36);
-            label(dst, stride, 48, 182, "Press Done to search", 1, DIM, 34);
+            label(dst, stride, 48, 127, TR(SYSTEM_KEYBOARD), 1, HIGHLIGHT, 30);
+            label(dst, stride, 48, 157, TR(TYPE_CITY), 1, TEXT, 36);
+            label(dst, stride, 48, 182, TR(DONE_SEARCH), 1, DIM, 34);
         } else {
-            label(dst, stride, 48, 126, "NATIVE KEYBOARD UNAVAILABLE", 1, GOLD, 36);
-            label(dst, stride, 48, 158, "Update Q2 Pod firmware", 1, TEXT, 32);
-            label(dst, stride, 48, 181, "to enable system text input", 1, DIM, 36);
+            label(dst, stride, 48, 126, TR(KEYBOARD_UNAVAILABLE), 1, GOLD, 36);
+            label(dst, stride, 48, 158, TR(UPDATE_FIRMWARE), 1, TEXT, 32);
+            label(dst, stride, 48, 181, TR(ENABLE_INPUT), 1, DIM, 36);
         }
         label(dst, stride, 42, 287, "BACK  LOCATIONS AND SETTINGS", 1, DIM, 35);
         return;
     }
     if (ui->page == 2) {
-        label(dst, stride, 40, 47, "SETTINGS", 2, TEXT, 16);
-        const char *titles[] = {"CHANGE SAVED CITY", "UNITS", "REFRESH WEATHER", "CLEAR SAVED CITY"};
+        label(dst, stride, 40, 47, TR(SETTINGS), 2, TEXT, 16);
+        const char *titles[] = {TR(CHANGE_CITY), TR(UNITS), TR(REFRESH), TR(CLEAR_CITY)};
         for (int i = 0; i < 4; i++) {
             int y = 76 + i * 48;
             rect(dst, stride, 31, y, 313, 43, ui->keyboard_index == i ? PANEL_LIGHT : PANEL);
@@ -280,19 +282,19 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
                       HIGHLIGHT, 5);
         }
         if (ui->search_result == 1)
-            label(dst, stride, 40, 277, "Searching city...", 1, GOLD, 34);
+            label(dst, stride, 40, 277, TR(SEARCHING), 1, GOLD, 34);
         else if (ui->search_result == 2)
-            label(dst, stride, 40, 277, "Saved city updated", 1, HIGHLIGHT, 34);
+            label(dst, stride, 40, 277, TR(UPDATED), 1, HIGHLIGHT, 34);
         else if (ui->search_result == -1)
-            label(dst, stride, 40, 277, "City not found - retry", 1, GOLD, 34);
-        label(dst, stride, 40, 289, "ICONS: TOMORROW.IO  BACK TO LOCATIONS", 1, DIM, 40);
+            label(dst, stride, 40, 277, TR(NOT_FOUND), 1, GOLD, 34);
+        label(dst, stride, 40, 289, TR(ICON_CREDIT), 1, DIM, 40);
         return;
     }
     if (ui->page == 0) {
-        label(dst, stride, 37, 49, "LOCATIONS", 1, DIM, 15);
+        label(dst, stride, 37, 49, TR(LOCATIONS), 1, DIM, 15);
         location_choice(dst, stride, ui, 0, 65);
         location_choice(dst, stride, ui, 1, 165);
-        label(dst, stride, 40, 276, "SELECT A LOCATION TO VIEW FORECAST", 1, DIM, 47);
+        label(dst, stride, 40, 276, TR(SELECT_LOCATION), 1, DIM, 47);
         label(dst, stride, 40, 289, "WHEEL SELECT  CENTER OPEN  BACK EXIT", 1, DIM, 45);
         return;
     }
@@ -309,7 +311,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             label(dst, stride, 250, 138, temp, 2, TEXT, 5);
             label(dst, stride, 243, 165, condition(loc->weather_code), 1, DIM, 13);
         } else {
-            label(dst, stride, 258, 113, "NO DATA", 1, DIM, 9);
+            label(dst, stride, 258, 113, TR(NO_DATA), 1, DIM, 9);
         }
         forecast(dst, stride, ui);
         label(dst, stride, 40, 289, "WHEEL DAY  CENTER DETAILS  BACK LOCATIONS", 1, DIM, 45);
@@ -323,18 +325,18 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             label(dst, stride, 152, 125, condition(day->weather_code), 1,
                   TEXT, 27);
             char text[48];
-            snprintf(text, sizeof text, "HIGH %d%c", units(day->high_c, ui->units_f),
+            snprintf(text, sizeof text, "%s %d%c", TR(HIGH), units(day->high_c, ui->units_f),
                      ui->units_f ? 'F' : 'C');
             label(dst, stride, 152, 152, text, 2, GOLD, 12);
-            snprintf(text, sizeof text, "LOW %d%c", units(day->low_c, ui->units_f),
+            snprintf(text, sizeof text, "%s %d%c", TR(LOW), units(day->low_c, ui->units_f),
                      ui->units_f ? 'F' : 'C');
             label(dst, stride, 152, 182, text, 2, RAIN, 12);
             if (day->precipitation_pct >= 0) {
-                snprintf(text, sizeof text, "Rain chance %d%%", day->precipitation_pct);
+                snprintf(text, sizeof text, "%s %d%%", TR(RAIN_CHANCE), day->precipitation_pct);
                 label(dst, stride, 152, 214, text, 1, DIM, 27);
             }
         } else {
-            label(dst, stride, 42, 113, "Forecast unavailable", 1, DIM, 32);
+            label(dst, stride, 42, 113, TR(FORECAST_UNAVAILABLE), 1, DIM, 32);
         }
         label(dst, stride, 40, 289, "WHEEL DAY  CENTER FORECAST  BACK", 1, DIM, 42);
     }
