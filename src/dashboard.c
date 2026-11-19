@@ -18,7 +18,7 @@ static void select_key(Dashboard *ui) {
     } else if (key == '<') {
         if (ui->city_length) ui->city_query[--ui->city_length] = 0;
     } else if (ui->city_length < (int)sizeof ui->city_query - 1) {
-        ui->city_query[ui->city_length++] = key;
+        ui->city_query[ui->city_length++] = key == '_' ? ' ' : key;
         ui->city_query[ui->city_length] = 0;
     }
 }
