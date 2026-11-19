@@ -268,7 +268,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             label(dst, stride, 14, 277, "Saved city updated", 1, HIGHLIGHT, 34);
         else if (ui->search_result == -1)
             label(dst, stride, 14, 277, "City not found - retry", 1, GOLD, 34);
-        label(dst, stride, 14, 300, "WHEEL SELECT  CENTER OPEN  BACK", 1, DIM, 40);
+        label(dst, stride, 14, 300, "ICONS: TOMORROW.IO  BACK TO LOCATIONS", 1, DIM, 40);
         return;
     }
     if (ui->page == 0) {
