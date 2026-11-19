@@ -69,3 +69,7 @@ The cache is stored on the SD card at `.weather/state`, and network diagnostics 
 ## License and credits
 
 Built for Q2 Pod with thanks to DiamondBond and the Q2 community. The small sprite-rendering approach follows the technical design of [q2-diamond-crush](https://github.com/lampsonlnguyen/q2-diamond-crush). Weather data comes from Open-Meteo.
+
+### Weather icon attribution
+
+The color weather icons are adapted from [Tomorrow.io Weather Code Icons](https://github.com/Tomorrow-IO-API/tomorrow-weather-codes), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). **Powered by Tomorrow.io** ([weather API](https://www.tomorrow.io/weather-api/)) — artwork only; forecasts continue to come from Open-Meteo. Attributions and the exact original asset mapping are documented in [assets/sprites/ATTRIBUTION.md](assets/sprites/ATTRIBUTION.md). The `wind.png` and `humidity.png` icons are original Q2 Weather artwork. Replace any PNG under `assets/sprites/` to customize your own build; the build resizes all icons automatically.
