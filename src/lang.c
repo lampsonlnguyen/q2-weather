@@ -30,7 +30,11 @@ static const struct {
     {"NO_DATA", "No data"}, {"FORECAST_UNAVAILABLE", "Forecast unavailable"},
     {"RAIN_CHANCE", "Rain chance"}, {"HIGH", "High"}, {"LOW", "Low"},
     {"BACK_LOCATIONS", "Back to locations"}, {"CENTER_DETAILS", "Center for details"},
-    {"ICON_CREDIT", "Icons: Tomorrow.io"}
+    {"ICON_CREDIT", "Icons: Tomorrow.io"},
+    {"CLEAR", "Clear"}, {"PARTLY_CLOUDY", "Partly cloudy"},
+    {"CLOUDY", "Cloudy"}, {"FOG", "Fog"}, {"DRIZZLE", "Drizzle"},
+    {"RAIN", "Rain"}, {"SNOW", "Snow"}, {"SHOWERS", "Showers"},
+    {"SNOW_SHOWERS", "Snow showers"}, {"THUNDERSTORM", "Thunderstorm"}
 };
 static char translated[WX_COUNT][96];
 
