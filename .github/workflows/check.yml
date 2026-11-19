@@ -18,7 +18,7 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     permissions:
-      contents: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'write' || 'read' }}
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Install toolchain
@@ -30,16 +30,6 @@ jobs:
         run: |
           clang-format -i src/*.c src/*.h tests/*.c
           clang-format --dry-run --Werror src/*.c src/*.h tests/*.c
-      - name: Push formatting changes
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src tests
-          if ! git diff --cached --quiet; then
-            git commit -m "style: apply clang-format to Q2 Weather"
-            git push origin HEAD:main
-          fi
       - name: Run host checks
         run: make check
       - name: Build Shanling Q2 executable
