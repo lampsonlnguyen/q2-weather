@@ -37,14 +37,10 @@ jobs:
           sh tools/sysroot.sh
           make
           unzip -t dist/q2-weather.zip
-          unzip -l dist/q2-weather.zip | grep '.weather/icons/sunny.jpg'
           unzip -l dist/q2-weather.zip | grep '.weather/icon.png'
-          unzip -l dist/q2-weather.zip | grep '.weather-view/q2-weather-view'
-          unzip -p dist/q2-weather.zip .weather-view/q2app | grep -Fx 'game=1'
-          unzip -p dist/q2-weather.zip .weather-view/q2app | grep -Fx 'row=library'
-          file dist/.weather-view/q2-weather-view | grep -E 'ELF 32-bit LSB.*MIPS'
+          unzip -p dist/q2-weather.zip .weather/q2app | grep -Fx 'game=1'
           unzip -p dist/q2-weather.zip .weather/q2app | grep -Fx 'row=library'
-          file dist/.weather/q2-weather | grep -E 'ELF 32-bit LSB.*MIPS'
+          test "$(unzip -Z1 dist/q2-weather.zip | grep -c '/q2app
       - uses: actions/upload-artifact@v4
         with:
           name: q2-weather-card-app
@@ -76,34 +72,43 @@ jobs:
               --title "$RELEASE_TAG (device test)"
           fi
 
-  publish_graphics_v020:
-    # One-time v0.2.0 release from a green main build. Future pushes do not
-    # replace published artifacts; subsequent versions use the tag workflow.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
+)" -eq 1
+          ! unzip -Z1 dist/q2-weather.zip | grep -q '^.weather-view/'
+          file dist/.weather/q2-weather | grep -E 'ELF 32-bit LSB.*MIPS'
+          file dist/.weather/q2-weather-service | grep -E 'ELF 32-bit LSB.*MIPS'
+      - uses: actions/upload-artifact@v4
         with:
           name: q2-weather-card-app
-          path: dist
-      - name: Publish native weather artwork release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TARGET_SHA: ${{ github.sha }}
-        run: |
-          if gh release view v0.2.0 >/dev/null 2>&1; then
-            echo 'v0.2.0 already published; not replacing it.'
-            exit 0
-          fi
-          gh release create v0.2.0 dist/q2-weather.zip \
-            --target "$TARGET_SHA" --title "Q2 Weather v0.2.0" \
-            --notes "Adds tiny pixel-weather sprites to Q2 Pod native Library rows, a launcher icon, and a seven-day illustrated forecast. Preserves IP location, Open-Meteo, offline cache, native Q2 wheel and firmware themes. Weather artwork requires the card-app art capability (older firmware falls back to text). On-device visual rendering is pending hardware testing."
+          path: dist/q2-weather.zip
+          if-no-files-found: error
 
-  publish_dashboard_v031:
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: q2-weather-card-app
+          path: dist
+      - name: Publish Q2 release ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/q2-weather.zip --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/q2-weather.zip \
+              --verify-tag --prerelease --generate-notes \
+              --title "$RELEASE_TAG (device test)"
+          fi
+
+
+  publish_single_app_v040:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-24.04
@@ -114,16 +119,17 @@ jobs:
         with:
           name: q2-weather-card-app
           path: dist
-      - name: Publish v0.3.1 graphical dashboard release
+      - name: Publish v0.4.0 integrated Weather app
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TARGET_SHA: ${{ github.sha }}
         run: |
-          if gh release view v0.3.1 >/dev/null 2>&1; then
-            echo 'v0.3.1 already published; not replacing it.'
+          if gh release view v0.4.0 >/dev/null 2>&1; then
+            echo 'v0.4.0 already exists; leaving immutable published version unchanged'
             exit 0
           fi
-          gh release create v0.3.1 dist/q2-weather.zip \
-            --target "$TARGET_SHA" --title "Q2 Weather v0.3.1 — Graphic Dashboard" \
-            --notes "Adds Weather Dashboard: a 375x320 static pixel-sprite dashboard under Library, with two location cards, selectable seven-day strip, detail view, wheel/touch input and redraw only when readings or selection change. Keeps the original Weather Library app for location search and manual refresh. Both share .weather/state. No SDL or runtime PNG decoding. Please test graphic handoff and refresh behavior on a physical Shanling Q2."
+          gh release create v0.4.0 dist/q2-weather.zip \
+            --target "$TARGET_SHA" \
+            --title "Q2 Weather v0.4.0 — Unified Graphic App" \
+            --notes "One Library Weather app. Static pixel-sprite dashboard, seven-day forecast, built-in settings, city keyboard, Celsius/Fahrenheit, manual refresh and offline cached conditions. The second Weather Dashboard app has been removed from the ZIP. Delete any existing .weather-view folder from older installations. Physical Q2 validation is still recommended."
