@@ -230,9 +230,23 @@ int main(void) {
     int pan = rows >= 2 * DASH_WIDTH && (front == 0 || front == DASH_WIDTH);
     unsigned shown = front;
     unsigned long last_poll = 0;
+    unsigned long last_service_check = 0;
+    int initial_refresh = 0;
     int last_units = ui.units_f;
     while (!interrupted && !ui.quit) {
         unsigned long now = now_ms();
+        if (now - last_service_check >= 10000) {
+            if (!connected_service()) {
+                pid_t restarted = start_service();
+                if (restarted > 0) service = restarted;
+                initial_refresh = 0;
+            }
+            last_service_check = now;
+        }
+        if (!initial_refresh && connected_service()) {
+            (void)service_command("refresh", "", NULL, 0);
+            initial_refresh = 1;
+        }
         if (now - last_poll >= REFRESH_MS) {
             (void)read_cache(&ui);
             last_poll = now;
@@ -279,7 +293,7 @@ int main(void) {
             ui.redraw = 0;
         }
         struct pollfd pfd = {input, POLLIN, 0};
-        int got = poll(&pfd, 1, 200);
+        int got = poll(&pfd, 1, 1000);
         if (got > 0 && (pfd.revents & POLLIN)) {
             char msg[80];
             ssize_t count = recv(input, msg, sizeof msg - 1, 0);
