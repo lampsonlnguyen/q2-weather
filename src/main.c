@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: MIT */
+#include "art.h"
 #include "http.h"
 #include "weather.h"
 
@@ -329,7 +330,10 @@ static void page_location(Reply *r, int slot) {
             display_number(temp, sizeof temp, loc->temperature_c);
             snprintf(subtitle, sizeof subtitle, "%s | Humidity %d%%",
                      weather_description(loc->weather_code), loc->humidity);
-            info(r, temp, subtitle);
+            char art_context[8];
+            snprintf(art_context, sizeof art_context, "%d", slot);
+            weather_art_row("hero", art_context, loc->weather_code);
+            row(r, "info", "hero", temp, subtitle, art_context);
         } else {
             info(r, loc->name, "No weather downloaded yet");
         }
@@ -345,7 +349,10 @@ static void page_location(Reply *r, int slot) {
                 else
                     snprintf(subtitle, sizeof subtitle, "%s / %s | Rain %d%% | %s", hi, lo,
                              d->precipitation_pct, weather_description(d->weather_code));
-                info(r, date, subtitle);
+                char art_context[16];
+                snprintf(art_context, sizeof art_context, "%d-%d", slot, i);
+                weather_art_row("forecast", art_context, d->weather_code);
+                row(r, "info", "forecast", date, subtitle, art_context);
             }
         }
         if (loc->valid) {
@@ -389,6 +396,7 @@ static void page_menu(Reply *r) {
         } else {
             snprintf(sub, sizeof sub, "%s", l->used ? l->name : "Not yet configured");
         }
+        if (l->valid) weather_art_row("location", i ? "1" : "0", l->weather_code);
         row(r, "list", "location", i ? "Saved Location" : "Current Location", sub,
             i ? "1" : "0");
     }
@@ -546,6 +554,7 @@ int main(void) {
     signal(SIGPIPE, SIG_IGN);
     weather_init(&rt.app);
     load_state();
+    weather_art_init();
     struct sockaddr_un addr = {0};
     addr.sun_family = AF_UNIX;
     snprintf(addr.sun_path, sizeof addr.sun_path, "%s", SOCKET_PATH);
@@ -572,5 +581,6 @@ int main(void) {
     }
     close(fd);
     unlink(SOCKET_PATH);
+    weather_art_cleanup();
     return 0;
 }
