@@ -35,6 +35,7 @@ int main(void) {
     assert(dashboard_input(&ui, "w 55") == 1);
     assert(ui.day == 1 && ui.page == 1);
     ui.wheel_percent = 100;
+    ui.wheel_rem = 0; /* sensitivity change resets accumulated travel */
     assert(dashboard_input(&ui, "w 14") == 1);
     assert(ui.day == 2);
     ui.wheel_percent = 50;
