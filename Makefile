@@ -10,7 +10,7 @@ Q2_LDFLAGS = -m elf32ltsmip -e __start --dynamic-linker /lib/ld-linux-mipsn8.so.
 	--image-base=0x400000 -z noexecstack --hash-style=sysv --build-id=none -s
 Q2_SRC = src/main.c src/http.c src/weather.c src/art.c src/crt-q2.c
 Q2_OBJ = $(patsubst src/%.c,build/q2/%.o,$(Q2_SRC))
-DASH_SRC = src/dashboard.c src/dashboard_render.c src/dashboard_q2.c src/theme.c src/art.c src/weather.c src/crt-q2.c
+DASH_SRC = src/dashboard.c src/dashboard_render.c src/dashboard_q2.c src/theme.c src/lang.c src/art.c src/weather.c src/crt-q2.c
 DASH_OBJ = $(patsubst src/%.c,build/dashboard/%.o,$(DASH_SRC))
 DIST = dist/.weather
 
@@ -61,12 +61,16 @@ $(DIST)/q2app: q2app
 	mkdir -p $(@D)
 	cp $< $@
 
+$(DIST)/lang/0.lang: assets/lang/0.lang
+	mkdir -p $(@D)
+	cp $< $@
+
 $(DIST)/icon.png: build/icons/icon.png
 	mkdir -p $(@D)
 	cp $< $@
 
-dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/q2-weather-service $(DIST)/q2app $(DIST)/icon.png
-	cd dist && zip -qX q2-weather.zip .weather/q2-weather .weather/q2-weather-service .weather/q2app .weather/icon.png
+dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/q2-weather-service $(DIST)/q2app $(DIST)/icon.png $(DIST)/lang/0.lang
+	cd dist && zip -qX q2-weather.zip .weather/q2-weather .weather/q2-weather-service .weather/q2app .weather/icon.png .weather/lang/0.lang
 
 build/test_weather: src/weather.c src/weather.h tests/test_weather.c
 	mkdir -p build
@@ -89,17 +93,22 @@ build/test_theme: tests/test_theme.c src/theme.c src/theme.h
 	mkdir -p build
 	$(CC) $(CFLAGS) -o $@ tests/test_theme.c src/theme.c
 
+build/test_lang: tests/test_lang.c src/lang.c src/lang.h
+	mkdir -p build
+	$(CC) $(CFLAGS) -o $@ tests/test_lang.c src/lang.c
+
 build/test_dashboard: tests/test_dashboard.c src/dashboard.c src/dashboard.h src/weather.h
 	mkdir -p build
 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -o $@ tests/test_dashboard.c src/dashboard.c
 
 host: build/host/q2-weather
 
-check: build/test_weather build/test_http build/test_art build/test_theme build/test_dashboard build/host/q2-weather
+check: build/test_weather build/test_http build/test_art build/test_theme build/test_lang build/test_dashboard build/host/q2-weather
 	./build/test_weather
 	./build/test_http
 	./build/test_art
 	./build/test_theme
+	./build/test_lang
 	./build/test_dashboard
 	@echo 'Single-app UI + network worker checks passed'
 
@@ -111,7 +120,7 @@ format-check:
 
 clean:
 	# Preserve build/sysroot and build/q2-rootfs.squashfs: these are expensive to recreate.
-	rm -rf build/q2 build/dashboard build/host build/weather_sprites.inc build/icons build/test_weather build/test_http build/test_art build/test_theme build/test_dashboard dist
+	rm -rf build/q2 build/dashboard build/host build/weather_sprites.inc build/icons build/test_weather build/test_http build/test_art build/test_theme build/test_lang build/test_dashboard dist
 
 clean-all:
 	rm -rf build dist
