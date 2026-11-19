@@ -73,44 +73,92 @@ done:
 int weather_on_open(WeatherApp *app,const WeatherBackend *backend) {
     return weather_refresh(app,backend,1);
 }
-int weather_write(const WeatherApp *app,char *out,size_t cap){
-    if(!app||!out||!cap)return -1;
-    int count=snprintf(out,cap,"Q2W1\n");
-    if(count<0||(size_t)count>=cap)return -1;
-    for(int i=0;i<Q2_WEATHER_SLOTS;i++) {
-        const WeatherLocation *l=&app->locations[i];
-        int n=snprintf(out+count,cap-(size_t)count,
-            "%d|%d|%s|%.6f|%.6f|%d|%d|%d|%d|%ld\n",i,l->used,l->used?l->name:"-",
-            l->latitude,l->longitude,l->valid,l->temperature_c,l->humidity,
-            l->weather_code,l->updated_at);
-        if(n<0||(size_t)n>=cap-(size_t)count)return -1;
-        count+=n;
+/* Persist both current conditions and the 7-day forecast atomically. The
+ * reader also accepts Q2W1, which did not store forecast days. */
+int weather_write(const WeatherApp *app, char *out, size_t cap) {
+    if (!app || !out || !cap) return -1;
+    int count = snprintf(out, cap, "Q2W2\n");
+    if (count < 0 || (size_t)count >= cap) return -1;
+    for (int i = 0; i < Q2_WEATHER_SLOTS; i++) {
+        const WeatherLocation *loc = &app->locations[i];
+        int n = snprintf(out + count, cap - (size_t)count,
+                         "%d|%d|%s|%.6f|%.6f|%d|%d|%d|%d|%ld\n", i, loc->used,
+                         loc->used ? loc->name : "-", loc->latitude, loc->longitude,
+                         loc->valid, loc->temperature_c, loc->humidity, loc->weather_code,
+                         loc->updated_at);
+        if (n < 0 || (size_t)n >= cap - (size_t)count) return -1;
+        count += n;
+        for (int day = 0; day < Q2_FORECAST_DAYS; day++) {
+            const WeatherDay *d = &loc->days[day];
+            n = snprintf(out + count, cap - (size_t)count, "%d|%d|%s|%d|%d|%d|%d\n",
+                         i, loc->forecast_valid, loc->forecast_valid ? d->date : "-",
+                         d->high_c, d->low_c, d->precipitation_pct, d->weather_code);
+            if (n < 0 || (size_t)n >= cap - (size_t)count) return -1;
+            count += n;
+        }
     }
     return count;
 }
-int weather_read(WeatherApp *app,const char *data) {
-    if(!app||!data||strncmp(data,"Q2W1\n",5))return -1;
-    WeatherApp next;weather_init(&next);
-    const char *p=data+5;
-    for(int i=0;i<Q2_WEATHER_SLOTS;i++) {
-        int idx,used,valid,temp,humid,code,offset=0;
-        long time;char name[Q2_WEATHER_NAME]={0};
-        double lat,lon;
-        /* Require an intact fixed-field record; empty slots use a placeholder. */
-        if(sscanf(p,"%d|%d|%63[^|]|%lf|%lf|%d|%d|%d|%d|%ld%n",
-                  &idx,&used,name,&lat,&lon,&valid,&temp,&humid,&code,&time,&offset)!=10||
-           idx!=i||!offset||(used!=0&&used!=1)||!coordinates(lat,lon)||
-           (valid!=0&&valid!=1))return -1;
-        if(used) {
-            if(weather_set_location(&next,i,name,lat,lon))return -1;
-            WeatherLocation *l=&next.locations[i];
-            l->valid=valid;l->temperature_c=temp;l->humidity=humid;
-            l->weather_code=code;l->updated_at=time;
+
+int weather_read(WeatherApp *app, const char *data) {
+    if (!app || !data) return -1;
+    int v2 = !strncmp(data, "Q2W2\n", 5);
+    if (!v2 && strncmp(data, "Q2W1\n", 5)) return -1;
+    WeatherApp next;
+    weather_init(&next);
+    const char *line = data + 5;
+    for (int i = 0; i < Q2_WEATHER_SLOTS; i++) {
+        int idx, used, valid, temp, humidity, code, consumed = 0;
+        char name[Q2_WEATHER_NAME] = {0};
+        double latitude, longitude;
+        long updated;
+        if (sscanf(line, "%d|%d|%63[^|]|%lf|%lf|%d|%d|%d|%d|%ld%n",
+                   &idx, &used, name, &latitude, &longitude, &valid, &temp,
+                   &humidity, &code, &updated, &consumed) != 10 ||
+            idx != i || consumed <= 0 || (used != 0 && used != 1) ||
+            (valid != 0 && valid != 1) || !coordinates(latitude, longitude))
+            return -1;
+        const char *end = strchr(line, '\n');
+        if (!end || end - line != consumed) return -1;
+        line = end + 1;
+        WeatherLocation *loc = &next.locations[i];
+        if (used) {
+            if (weather_set_location(&next, i, name, latitude, longitude)) return -1;
+            loc->valid = valid;
+            loc->temperature_c = temp;
+            loc->humidity = humidity;
+            loc->weather_code = code;
+            loc->updated_at = updated;
         }
-        const char *newline=strchr(p,'\n');
-        if(!newline||newline-p!=offset)return -1;
-        p=newline+1;
+        if (!v2) continue;
+        int forecast = -1;
+        for (int day = 0; day < Q2_FORECAST_DAYS; day++) {
+            char date[11] = {0};
+            int day_idx, enabled, high, low, rain, wmo;
+            consumed = 0;
+            if (sscanf(line, "%d|%d|%10[^|]|%d|%d|%d|%d%n", &day_idx, &enabled,
+                       date, &high, &low, &rain, &wmo, &consumed) != 7 ||
+                day_idx != i || (enabled != 0 && enabled != 1) ||
+                consumed <= 0 || (forecast != -1 && forecast != enabled))
+                return -1;
+            end = strchr(line, '\n');
+            if (!end || end - line != consumed) return -1;
+            line = end + 1;
+            forecast = enabled;
+            if (!enabled) continue;
+            if (!used || strlen(date) != 10 || date[4] != '-' || date[7] != '-' ||
+                rain < 0 || rain > 100)
+                return -1;
+            WeatherDay *d = &loc->days[day];
+            memcpy(d->date, date, sizeof d->date);
+            d->high_c = high;
+            d->low_c = low;
+            d->precipitation_pct = rain;
+            d->weather_code = wmo;
+        }
+        if (used && forecast == 1) loc->forecast_valid = 1;
     }
-    if(*p)return -1;
-    *app=next;return 0;
+    if (*line) return -1;
+    *app = next;
+    return 0;
 }
