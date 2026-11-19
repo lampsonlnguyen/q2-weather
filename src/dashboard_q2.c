@@ -7,6 +7,8 @@
 #include <fcntl.h>
 #include <linux/fb.h>
 #include <poll.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <signal.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -22,10 +24,11 @@
 #include <time.h>
 #include <unistd.h>
 
-#define INPUT_SOCKET "/tmp/q2-weather-view.input.sock"
+#define INPUT_SOCKET "/tmp/q2-weather.input.sock"
 #define BROWSE_SOCKET "/tmp/q2-weather.browse.sock"
 #define STATE_PATH "/mnt/mmc/.weather/state"
-#define SERVICE_PATH "/mnt/mmc/.weather/q2-weather"
+#define SERVICE_PATH "/mnt/mmc/.weather/q2-weather-service"
+#define UNITS_PATH "/mnt/mmc/.weather/units"
 #define REFRESH_MS 1000
 
 static volatile sig_atomic_t interrupted;
@@ -60,6 +63,89 @@ static pid_t start_service(void) {
         _exit(127);
     }
     return pid > 0 ? pid : -1;
+}
+
+/* Q2SPOT/1 service is an internal helper, not a second installed card app.
+ * Keep network and city lookup off the display/input thread. */
+static int service_command(const char *op, const char *arg, char *response, size_t cap) {
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return -1;
+    struct sockaddr_un address = {0};
+    address.sun_family = AF_UNIX;
+    snprintf(address.sun_path, sizeof address.sun_path, "%s", BROWSE_SOCKET);
+    struct timeval timeout = {2, 0};
+    (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+    (void)setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof timeout);
+    if (connect(fd, (struct sockaddr *)&address, sizeof address)) {
+        close(fd);
+        return -1;
+    }
+    char request[256];
+    int count = snprintf(request, sizeof request, "Q2SPOT/1\\n1\\t%s\\t%s\\n",
+                         op, arg ? arg : "");
+    if (count < 0 || count >= (int)sizeof request ||
+        send(fd, request, (size_t)count, MSG_NOSIGNAL) != count) {
+        close(fd);
+        return -1;
+    }
+    shutdown(fd, SHUT_WR);
+    if (response && cap > 1) {
+        ssize_t got = recv(fd, response, cap - 1, 0);
+        if (got < 1) {
+            close(fd);
+            return -1;
+        }
+        response[got] = 0;
+    }
+    close(fd);
+    return 0;
+}
+
+static _Atomic int city_result;
+static char city_job[48];
+
+static void *city_lookup(void *unused) {
+    (void)unused;
+    char response[2048];
+    int result = -1;
+    if (service_command("citysearch", city_job, response, sizeof response) == 0) {
+        for (int attempt = 0; attempt < 16 && !interrupted; attempt++) {
+            sleep(1);
+            if (service_command("cities", "", response, sizeof response)) continue;
+            const char *action = strstr(response, "\\naction\\tsavecity\\t");
+            if (!action) continue;
+            const char *subtitle = strchr(action + 17, '\\t');
+            const char *coords = subtitle ? strchr(subtitle + 1, '\\t') : NULL;
+            double lat, lon;
+            if (coords && sscanf(coords + 1, "%lf %lf", &lat, &lon) == 2) {
+                char value[90];
+                snprintf(value, sizeof value, "%.6f %.6f", lat, lon);
+                if (!service_command("savecity", value, response, sizeof response) &&
+                    strstr(response, "\\tok\\t")) {
+                    result = 2;
+                }
+            }
+            break;
+        }
+    }
+    atomic_store(&city_result, result);
+    return NULL;
+}
+
+static int load_units(void) {
+    FILE *file = fopen(UNITS_PATH, "rb");
+    if (!file) return 0;
+    int unit = fgetc(file) == '1';
+    fclose(file);
+    return unit;
+}
+
+static void save_units(int unit) {
+    FILE *file = fopen(UNITS_PATH, "wb");
+    if (file) {
+        (void)fputc(unit ? '1' : '0', file);
+        (void)fclose(file);
+    }
 }
 
 static int read_cache(Dashboard *ui) {
@@ -98,6 +184,7 @@ int main(void) {
     signal(SIGPIPE, SIG_IGN);
     Dashboard ui;
     dashboard_init(&ui);
+    ui.units_f = load_units();
     (void)read_cache(&ui);
     pid_t service = start_service();
     int fb = open("/dev/fb0", O_RDWR | O_CLOEXEC);
@@ -140,11 +227,39 @@ int main(void) {
     int pan = rows >= 2 * DASH_WIDTH && (front == 0 || front == DASH_WIDTH);
     unsigned shown = front;
     unsigned long last_poll = 0;
+    int last_units = ui.units_f;
     while (!interrupted && !ui.quit) {
         unsigned long now = now_ms();
         if (now - last_poll >= REFRESH_MS) {
             (void)read_cache(&ui);
             last_poll = now;
+        }
+        int city_state = atomic_load(&city_result);
+        if (ui.search_result == 1 && city_state && city_state != 1) {
+            ui.search_result = city_state;
+            ui.redraw = 1;
+        }
+        if (ui.search_request) {
+            ui.search_request = 0;
+            snprintf(city_job, sizeof city_job, "%s", ui.city_query);
+            atomic_store(&city_result, 1);
+            pthread_t worker;
+            if (!pthread_create(&worker, NULL, city_lookup, NULL))
+                pthread_detach(worker);
+            else
+                ui.search_result = -1;
+        }
+        if (ui.refresh_request) {
+            ui.refresh_request = 0;
+            (void)service_command("refresh", "", NULL, 0);
+        }
+        if (ui.clear_request) {
+            ui.clear_request = 0;
+            (void)service_command("clear", "", NULL, 0);
+        }
+        if (ui.units_f != last_units) {
+            last_units = ui.units_f;
+            save_units(last_units);
         }
         if (ui.redraw) {
             unsigned target = pan ? (shown ? 0 : DASH_WIDTH) : shown;
