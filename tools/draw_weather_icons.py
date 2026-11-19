@@ -110,3 +110,39 @@ app_icon.resize((40, 40), Image.Resampling.NEAREST).save(
     OUT / "icon-40.png", "PNG", optimize=True
 )
 print(f"Generated {len(NAMES)} weather art sprites and two launcher icons")
+
+# Also pack the same 24x24 original pixels into a tiny static C sprite atlas.
+# The runtime never decodes the JPEGs or holds large RGBA images in RAM.
+atlas = ROOT / "build" / "weather_sprites.inc"
+with atlas.open("w", encoding="ascii") as f:
+    f.write("/* Generated weather sprite atlas; do not edit. */\\n")
+    f.write("static const unsigned int weather_sprite[15][576] = {\\n")
+    for name in NAMES:
+        icon = make(name).resize((24, 24), Image.Resampling.NEAREST)
+        pixels = list(icon.getdata())
+        f.write(" { /* " + name + " */\\n")
+        for start in range(0, len(pixels), 12):
+            rgb = pixels[start:start + 12]
+            f.write("  " + ", ".join(
+                "0x%06xu" % (r << 16 | g << 8 | b) for r, g, b in rgb
+            ) + ",\\n")
+        f.write(" },\\n")
+    f.write("};\\n")
+    # Pillow's built-in fixed-size font, converted into an embedded bitmap.
+    # No external runtime font files or copyright-dependent game sprites.
+    from PIL import ImageFont
+    font = ImageFont.load_default()
+    f.write("static const unsigned char weather_glyph[95][12] = {\\n")
+    for code in range(32, 127):
+        letter = Image.new("L", (8, 12), 0)
+        canvas = ImageDraw.Draw(letter)
+        canvas.text((0, -2), chr(code), font=font, fill=255)
+        bits = []
+        for y in range(12):
+            value = 0
+            for x in range(8):
+                if letter.getpixel((x, y)) >= 128:
+                    value |= 1 << (7 - x)
+            bits.append(value)
+        f.write(" {" + ", ".join(str(n) for n in bits) + "},\\n")
+    f.write("};\\n")
