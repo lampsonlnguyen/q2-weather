@@ -99,7 +99,12 @@ int dashboard_input(Dashboard *ui, const char *event) {
     int wheel;
     if (sscanf(event, "w %d", &wheel) == 1) {
         /* Q2 full-screen input sign is opposite the Library list. */
-        ui->wheel_rem -= wheel;
+        int movement = -wheel;
+        /* A direction change starts a fresh detent instead of cancelling
+         * the previous direction's unconsumed remainder. */
+        if ((movement > 0 && ui->wheel_rem < 0) ||
+            (movement < 0 && ui->wheel_rem > 0)) ui->wheel_rem = 0;
+        ui->wheel_rem += movement;
         int changed = 0;
         int *selection = ui->page == 0 ? &ui->slot :
                          ui->page == 1 || ui->page == 4 ? &ui->day :
