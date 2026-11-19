@@ -39,6 +39,10 @@ jobs:
           unzip -t dist/q2-weather.zip
           unzip -l dist/q2-weather.zip | grep '.weather/icons/sunny.jpg'
           unzip -l dist/q2-weather.zip | grep '.weather/icon.png'
+          unzip -l dist/q2-weather.zip | grep '.weather-view/q2-weather-view'
+          unzip -p dist/q2-weather.zip .weather-view/q2app | grep -Fx 'game=1'
+          unzip -p dist/q2-weather.zip .weather-view/q2app | grep -Fx 'row=library'
+          file dist/.weather-view/q2-weather-view | grep -E 'ELF 32-bit LSB.*MIPS'
           unzip -p dist/q2-weather.zip .weather/q2app | grep -Fx 'row=library'
           file dist/.weather/q2-weather | grep -E 'ELF 32-bit LSB.*MIPS'
       - uses: actions/upload-artifact@v4
@@ -72,7 +76,7 @@ jobs:
               --title "$RELEASE_TAG (device test)"
           fi
 
-  publish_graphics:
+  publish_graphics_v020:
     # One-time v0.2.0 release from a green main build. Future pushes do not
     # replace published artifacts; subsequent versions use the tag workflow.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -98,3 +102,28 @@ jobs:
           gh release create v0.2.0 dist/q2-weather.zip \
             --target "$TARGET_SHA" --title "Q2 Weather v0.2.0" \
             --notes "Adds tiny pixel-weather sprites to Q2 Pod native Library rows, a launcher icon, and a seven-day illustrated forecast. Preserves IP location, Open-Meteo, offline cache, native Q2 wheel and firmware themes. Weather artwork requires the card-app art capability (older firmware falls back to text). On-device visual rendering is pending hardware testing."
+
+  publish_dashboard_v030:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: q2-weather-card-app
+          path: dist
+      - name: Publish v0.3.0 graphical dashboard release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          if gh release view v0.3.0 >/dev/null 2>&1; then
+            echo 'v0.3.0 already published; not replacing it.'
+            exit 0
+          fi
+          gh release create v0.3.0 dist/q2-weather.zip \
+            --target "$TARGET_SHA" --title "Q2 Weather v0.3.0 — Graphic Dashboard" \
+            --notes "Adds Weather Dashboard: a 375x320 static pixel-sprite dashboard under Library, with two location cards, selectable seven-day strip, detail view, wheel/touch input and redraw only when readings or selection change. Keeps the original Weather Library app for location search and manual refresh. Both share .weather/state. No SDL or runtime PNG decoding. Please test graphic handoff and refresh behavior on a physical Shanling Q2."
