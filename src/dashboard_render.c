@@ -8,14 +8,40 @@
 /* Generated 24x24 pixels and an 8x12 bitmap font. No runtime decoding. */
 #include "weather_sprites.inc"
 
-#define BG 0x101825u
-#define PANEL 0x1b2b3du
-#define PANEL_LIGHT 0x223b50u
-#define HIGHLIGHT 0x56d7e7u
-#define TEXT 0xf1f6fau
-#define DIM 0xa5b9cau
-#define GOLD 0xffce69u
-#define RAIN 0x7bcdf5u
+/* Separate high-contrast palettes; Q2 settings determine the active half.
+ * Palette accents track the firmware's selected theme/accent family. */
+typedef struct { uint32_t bg, panel, raised, outline, highlight, text, muted, gold, rain; } Palette;
+static Palette palette;
+#define BG palette.bg
+#define PANEL palette.panel
+#define PANEL_LIGHT palette.raised
+#define BORDER palette.outline
+#define HIGHLIGHT palette.highlight
+#define TEXT palette.text
+#define DIM palette.muted
+#define GOLD palette.gold
+#define RAIN palette.rain
+
+static void choose_palette(const Dashboard *ui) {
+    if (ui->theme_light) {
+        palette = (Palette){0xf7f8fau, 0xffffffffu, 0xe9f2f7u,
+                            0x9eb7c7u, 0x075e82u, 0x172738u, 0x425667u,
+                            0x825000u, 0x075e9au};
+    } else {
+        palette = (Palette){0x111b28u, 0x202c3du, 0x304459u,
+                            0x668198u, 0x80dcf1u, 0xf5f8fcu, 0xc4d1deu,
+                            0xffd16bu, 0x83c6f5u};
+    }
+    static const uint32_t dark_accent[] = {0xaab6c5u, 0xff8893u, 0x80dcf1u,
+                                           0xffd48fu, 0x92b8ffu, 0xffb47eu,
+                                           0xcf9dffu, 0xf5f0d5u, 0x88dbaeu};
+    static const uint32_t light_accent[] = {0x455668u, 0x972d40u, 0x075e82u,
+                                            0x825000u, 0x244a90u, 0x93420au,
+                                            0x63368fu, 0x5a4c2bu, 0x176944u};
+    int i = ui->theme_accent;
+    if (i < 0 || i >= 9) i = ui->theme_id == 2 ? 4 : 2;
+    palette.highlight = ui->theme_light ? light_accent[i] : dark_accent[i];
+}
 
 static void rect(uint32_t *dst, unsigned stride, int x, int y, int w, int h, uint32_t col) {
     if (x < 0) w += x, x = 0;
@@ -36,20 +62,44 @@ static void frame(uint32_t *dst, unsigned stride, int x, int y, int w, int h, ui
     rect(dst, stride, x + w - 1, y, 1, h, col);
 }
 
+static uint32_t blend(uint32_t back, uint32_t front, unsigned alpha) {
+    unsigned inv = 255 - alpha;
+    unsigned r = (((back >> 16) & 255) * inv + ((front >> 16) & 255) * alpha + 127) / 255;
+    unsigned g = (((back >> 8) & 255) * inv + ((front >> 8) & 255) * alpha + 127) / 255;
+    unsigned b = ((back & 255) * inv + (front & 255) * alpha + 127) / 255;
+    return 0xff000000u | (r << 16) | (g << 8) | b;
+}
+
+static void pixel_blend(uint32_t *dst, unsigned stride, int x, int y,
+                        uint32_t color, unsigned alpha) {
+    if (x < 0 || y < 0 || x >= DASH_WIDTH || y >= DASH_HEIGHT || !alpha) return;
+    uint32_t *p = &dst[(unsigned)x * stride + DASH_HEIGHT - y - 1];
+    *p = blend(*p, color, alpha);
+}
+
+/* Proportional, antialiased DejaVu Sans; rasterized at build time.
+ * Only alpha coverage lives on the Q2, not a font engine. */
 static void label(uint32_t *dst, unsigned stride, int x, int y, const char *s, int scale,
                   uint32_t color, int max_chars) {
-    int printed = 0;
-    for (; *s && printed < max_chars; s++, printed++) {
+    int large = scale > 1;
+    for (int printed = 0; *s && printed < max_chars; s++, printed++) {
         unsigned char c = (unsigned char)*s;
         if (c < 32 || c > 126) c = '?';
-        const unsigned char *font = weather_glyph[c - 32];
-        for (int row = 0; row < 12; row++) {
-            unsigned bits = font[row];
-            for (int col = 0; col < 8; col++)
-                if (bits & (128u >> col))
-                    rect(dst, stride, x + col * scale, y + row * scale, scale, scale, color);
+        unsigned index = (unsigned)c - 32;
+        if (large) {
+            for (int py = 0; py < 30; py++)
+                for (int px = 0; px < 23; px++)
+                    pixel_blend(dst, stride, x + px, y + py, color,
+                                weather_font_large[index][py][px]);
+            x += weather_font_large_advance[index];
+        } else {
+            for (int py = 0; py < 18; py++)
+                for (int px = 0; px < 13; px++)
+                    pixel_blend(dst, stride, x + px, y + py, color,
+                                weather_font_small[index][py][px]);
+            x += weather_font_small_advance[index];
         }
-        x += 8 * scale;
+        if (x >= DASH_WIDTH - 4) break;
     }
 }
 
@@ -83,9 +133,15 @@ static int icon_index(int code) {
 static void icon(uint32_t *dst, unsigned stride, int x, int y, int code, int scale) {
     int index = icon_index(code);
     for (int py = 0; py < 24; py++)
-        for (int px = 0; px < 24; px++)
-            rect(dst, stride, x + px * scale, y + py * scale, scale, scale,
-                 weather_sprite[index][py * 24 + px]);
+        for (int px = 0; px < 24; px++) {
+            uint32_t argb = weather_sprite[index][py * 24 + px];
+            unsigned alpha = argb >> 24;
+            if (!alpha) continue;
+            for (int yy = 0; yy < scale; yy++)
+                for (int xx = 0; xx < scale; xx++)
+                    pixel_blend(dst, stride, x + px * scale + xx,
+                                y + py * scale + yy, argb & 0xffffffu, alpha);
+        }
 }
 
 static int units(int c, int f) {
@@ -97,7 +153,7 @@ static void location(uint32_t *dst, unsigned stride, const Dashboard *ui, int sl
     const WeatherLocation *loc = &ui->weather.locations[slot];
     uint32_t fill = slot == ui->slot ? PANEL_LIGHT : PANEL;
     rect(dst, stride, 14, y, 219, height, fill);
-    frame(dst, stride, 14, y, 219, height, slot == ui->slot ? HIGHLIGHT : 0x385368u);
+    frame(dst, stride, 14, y, 219, height, slot == ui->slot ? HIGHLIGHT : BORDER);
     label(dst, stride, 24, y + 5, slot ? "SAVED LOCATION" : "CURRENT LOCATION", 1, DIM, 18);
     if (!loc->used) {
         label(dst, stride, 24, y + 31, slot ? "No saved city" : "Finding location",
@@ -124,7 +180,7 @@ static void forecast(uint32_t *dst, unsigned stride, const Dashboard *ui) {
         int x = 14 + i * 50;
         uint32_t fill = i == ui->day ? PANEL_LIGHT : PANEL;
         rect(dst, stride, x, 209, 46, 74, fill);
-        frame(dst, stride, x, 209, 46, 74, i == ui->day ? HIGHLIGHT : 0x345166u);
+        frame(dst, stride, x, 209, 46, 74, i == ui->day ? HIGHLIGHT : BORDER);
         if (!loc->forecast_valid) {
             label(dst, stride, x + 11, 237, "--", 1, DIM, 2);
             continue;
@@ -141,22 +197,23 @@ static void forecast(uint32_t *dst, unsigned stride, const Dashboard *ui) {
 }
 
 void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
+    choose_palette(ui);
     rect(dst, stride, 0, 0, DASH_WIDTH, DASH_HEIGHT, BG);
     rect(dst, stride, 0, 0, DASH_WIDTH, 39, PANEL);
-    rect(dst, stride, 0, 38, DASH_WIDTH, 1, 0x35546au);
+    rect(dst, stride, 0, 38, DASH_WIDTH, 1, BORDER);
     label(dst, stride, 14, 11, ui->detailed ? "< BACK" : "Q2 WEATHER", 1, TEXT, 22);
     if (ui->page == 0)
         label(dst, stride, 287, 11, "SETTINGS", 1, HIGHLIGHT, 8);
     else
         label(dst, stride, 287, 11, "WEATHER", 1, DIM, 8);
     if (ui->page == 3) {
-        label(dst, stride, 14, 51, "SEARCH CITY", 2, TEXT, 20);
+        label(dst, stride, 14, 47, "SEARCH CITY", 2, TEXT, 20);
         label(dst, stride, 14, 67, ui->city_query, 1, HIGHLIGHT, 40);
         const char *keys = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _<+";
         for (int i = 0; keys[i]; ++i) {
             int x = 14 + (i % 6) * 58, y = 80 + (i / 6) * 32;
             rect(dst, stride, x, y, 53, 29, ui->keyboard_index == i ? PANEL_LIGHT : PANEL);
-            frame(dst, stride, x, y, 53, 29, ui->keyboard_index == i ? HIGHLIGHT : 0x345166u);
+            frame(dst, stride, x, y, 53, 29, ui->keyboard_index == i ? HIGHLIGHT : BORDER);
             char letter[2] = {keys[i], 0};
             if (letter[0] == '_') letter[0] = ' ';
             label(dst, stride, x + 20, y + 7, letter, 1, TEXT, 1);
@@ -165,13 +222,13 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         return;
     }
     if (ui->page == 2) {
-        label(dst, stride, 14, 53, "SETTINGS", 2, TEXT, 16);
+        label(dst, stride, 14, 47, "SETTINGS", 2, TEXT, 16);
         const char *titles[] = {"CHANGE SAVED CITY", "UNITS", "REFRESH WEATHER", "CLEAR SAVED CITY"};
         for (int i = 0; i < 4; i++) {
             int y = 76 + i * 48;
             rect(dst, stride, 14, y, 346, 43, ui->keyboard_index == i ? PANEL_LIGHT : PANEL);
             frame(dst, stride, 14, y, 346, 43,
-                  ui->keyboard_index == i ? HIGHLIGHT : 0x345166u);
+                  ui->keyboard_index == i ? HIGHLIGHT : BORDER);
             label(dst, stride, 24, y + 12, titles[i], 1, TEXT, 25);
             if (i == 1)
                 label(dst, stride, 292, y + 12, ui->units_f ? "FAHR" : "CELS", 1,
@@ -191,7 +248,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         location(dst, stride, ui, 1, 126, 57);
         const WeatherLocation *loc = &ui->weather.locations[ui->slot];
         rect(dst, stride, 244, 50, 116, 133, PANEL);
-        frame(dst, stride, 244, 50, 116, 133, 0x385368u);
+        frame(dst, stride, 244, 50, 116, 133, BORDER);
         if (loc->valid) {
             icon(dst, stride, 266, 60, loc->weather_code, 3);
             char temp[22];
@@ -206,7 +263,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         label(dst, stride, 14, 293, "WHEEL DAY  CENTER DETAILS  BACK EXIT", 1, DIM, 45);
     } else {
         const WeatherLocation *loc = &ui->weather.locations[ui->slot];
-        label(dst, stride, 14, 50, loc->used ? loc->name : "No location", 2, TEXT, 20);
+        label(dst, stride, 14, 45, loc->used ? loc->name : "No location", 2, TEXT, 20);
         if (loc->forecast_valid) {
             const WeatherDay *day = &loc->days[ui->day];
             icon(dst, stride, 14, 100, day->weather_code, 4);
