@@ -2,6 +2,14 @@
 
 An SD-card Library app for the Shanling Q2 running [DiamondBond's Q2 Pod](https://github.com/DiamondBond/q2-pod), using its native card-app browser. Current observations and seven days of weather for two locations.
 
+## Weather artwork (v0.2.0)
+
+The Library app displays original pixel-weather artwork beside both location rows and each of the seven forecast days. This uses **Q2 Pod's native JPEG art-row feature**, not a custom framebuffer or game UI. It preserves Q2 Pod's theme, wheel scroll, Return button, city-entry keyboard, and background music. Q2 Pod's art rows require a firmware version supporting the `art` capability; older versions continue to show the text-only interface.
+
+The icons are small original sprites drawn at build time by `tools/draw_weather_icons.py` (Pillow). They are scaled with nearest-neighbor to 96 × 96 JPEGs, stored under `.weather/icons/`, and copied into Q2 Pod's `/tmp/q2-weather.art/` when each row is shown. There is no PNG decoder, framebuffer polling, continuous animation, or image conversion on the device. A 52 × 52 and a 40 × 40 launcher icon are also included.
+
+This is a lightweight **native Library art-row implementation**, rather than the full-screen cover-flow dashboard depicted in the earlier conceptual mockup. The firmware retains control of row layout and navigation.
+
 ## Features
 
 - **Current Location:** approximate city detected from the Q2's public IP via [ipwho.is](https://ipwho.is/).
@@ -36,7 +44,7 @@ Weather observes Q2 Pod's Wi-Fi setting and uses the firmware's existing **Smart
 
 ## Build and tests
 
-On Ubuntu or WSL, install `clang clang-format lld gcc make libcurl4-openssl-dev squashfs-tools unzip zip curl xz-utils binutils`.
+On Ubuntu or WSL, install `clang clang-format lld gcc make libcurl4-openssl-dev squashfs-tools unzip zip curl xz-utils binutils python3-pil`.
 
 ```sh
 make check
@@ -51,7 +59,9 @@ GitHub Actions runs clang-format automatically, host regression tests, the MIPS 
 
 ## Architecture
 
-- `src/main.c`: Q2SPOT/1 Unix socket server, Library menu pages, on-device location selection, asynchronous refresh and SD-card persistence.
+- `src/main.c`: Q2SPOT/1 Unix socket server, Library menu pages, on-device location selection, asynchronous refresh, art-row hooks and SD-card persistence.
+- `src/art.c`: lightweight weather-code mapping and Q2 Pod native art-row JPEG integration.
+- `tools/draw_weather_icons.py`: generates original 96-pixel weather icons and launcher PNG at build time. No on-device Python or PNG decoder.
 - `src/http.c`: HTTPS with Q2's stock libcurl, ipwho.is geolocation, Open-Meteo geocoding and weather data.
 - `src/weather.c`: portable two-location application state, Wi-Fi ownership callbacks and versioned forecast cache serialization.
 - `src/crt-q2.c`: Q2 glibc startup shim, from [DiamondBond/q2-mixtape](https://github.com/DiamondBond/q2-mixtape), GPL-2.0-or-later.
