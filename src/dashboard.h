@@ -18,7 +18,7 @@ typedef struct {
     int redraw;
     int quit;
     int wheel_rem;
-    int page; /* 0 overview, 1 detail, 2 settings, 3 city entry */
+    int page; /* 0 locations, 1 forecast dashboard, 2 settings, 3 city entry, 4 day detail */
     int keyboard_index;
     int search_request;
     int refresh_request;
