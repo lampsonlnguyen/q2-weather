@@ -7,7 +7,7 @@
 #include <string.h>
 
 static const char *response;
-static const char *requested_url;
+static char requested_url[1024];
 static size_t (*writer)(char *, size_t, size_t, void *);
 static void *write_ctx;
 
@@ -17,7 +17,7 @@ int curl_easy_setopt(void *curl, int option, ...) {
     va_list ap;
     va_start(ap, option);
     if (option == 10002)
-        requested_url = va_arg(ap, const char *);
+        snprintf(requested_url, sizeof requested_url, "%s", va_arg(ap, const char *));
     else if (option == 20011)
         writer = va_arg(ap, size_t (*)(char *, size_t, size_t, void *));
     else if (option == 10001)
