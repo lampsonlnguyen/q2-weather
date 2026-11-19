@@ -58,6 +58,9 @@ done:
     if(ours&&backend->set_wifi(backend->ctx,0))result=WEATHER_RADIO;
     return result;
 }
+int weather_on_open(WeatherApp *app,const WeatherBackend *backend) {
+    return weather_refresh(app,backend,1);
+}
 int weather_write(const WeatherApp *app,char *out,size_t cap){
     if(!app||!out||!cap)return -1;
     int count=snprintf(out,cap,"Q2W1\n");
@@ -65,7 +68,7 @@ int weather_write(const WeatherApp *app,char *out,size_t cap){
     for(int i=0;i<Q2_WEATHER_SLOTS;i++) {
         const WeatherLocation *l=&app->locations[i];
         int n=snprintf(out+count,cap-(size_t)count,
-            "%d|%d|%s|%.6f|%.6f|%d|%d|%d|%d|%ld\n",i,l->used,l->name,
+            "%d|%d|%s|%.6f|%.6f|%d|%d|%d|%d|%ld\n",i,l->used,l->used?l->name:"-",
             l->latitude,l->longitude,l->valid,l->temperature_c,l->humidity,
             l->weather_code,l->updated_at);
         if(n<0||(size_t)n>=cap-(size_t)count)return -1;
