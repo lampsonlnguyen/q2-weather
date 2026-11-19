@@ -135,6 +135,47 @@ static void *city_lookup(void *unused) {
     return NULL;
 }
 
+/* Q2 Pod stores its Display theme, Light Mode and accent in this INI.
+ * Light=2 follows the firmware's 07:00–19:00 automatic day interval. */
+static void read_theme(Dashboard *ui) {
+    FILE *file = fopen("/mnt/data/config.ini", "rb");
+    if (!file) return;
+    int in_ipod = 0, light = 0, theme = 0, accent = -1;
+    char line[192];
+    while (fgets(line, sizeof line, file)) {
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (*p == '[') {
+            in_ipod = !strncmp(p, "[IPOD]", 6);
+            continue;
+        }
+        if (!in_ipod || *p == '#' || *p == ';') continue;
+        char *eq = strchr(p, '=');
+        if (!eq) continue;
+        *eq++ = 0;
+        char *end = p + strlen(p);
+        while (end > p && (end[-1] == ' ' || end[-1] == '\t')) *--end = 0;
+        int value = atoi(eq);
+        if (!strcmp(p, "LIGHT") && value >= 0 && value <= 2) light = value;
+        else if (!strcmp(p, "THEME") && value >= 0 && value <= 2) theme = value;
+        else if (!strcmp(p, "MINIMAL_ACCENT") && value >= 0 && value < 9)
+            accent = value;
+    }
+    fclose(file);
+    if (light == 2) {
+        time_t t = time(NULL);
+        struct tm local;
+        if (localtime_r(&t, &local)) light = local.tm_hour >= 7 && local.tm_hour < 19;
+        else light = 0;
+    }
+    if (ui->theme_light != light || ui->theme_id != theme || ui->theme_accent != accent) {
+        ui->theme_light = light;
+        ui->theme_id = theme;
+        ui->theme_accent = accent;
+        ui->redraw = 1;
+    }
+}
+
 static int load_units(void) {
     FILE *file = fopen(UNITS_PATH, "rb");
     if (!file) return 0;
@@ -188,6 +229,8 @@ int main(void) {
     Dashboard ui;
     dashboard_init(&ui);
     ui.units_f = load_units();
+    ui.theme_accent = -1;
+    read_theme(&ui);
     (void)read_cache(&ui);
     pid_t service = start_service();
     int fb = open("/dev/fb0", O_RDWR | O_CLOEXEC);
@@ -231,10 +274,15 @@ int main(void) {
     unsigned shown = front;
     unsigned long last_poll = 0;
     unsigned long last_service_check = 0;
+    unsigned long last_theme_check = 0;
     int initial_refresh = service > 0; /* Newly launched helper refreshes itself. */
     int last_units = ui.units_f;
     while (!interrupted && !ui.quit) {
         unsigned long now = now_ms();
+        if (now - last_theme_check >= 10000) {
+            read_theme(&ui);
+            last_theme_check = now;
+        }
         if (now - last_service_check >= 10000) {
             if (!connected_service()) {
                 pid_t restarted = start_service();
