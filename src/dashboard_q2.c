@@ -22,7 +22,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define INPUT_SOCKET "/tmp/q2-weather-dashboard.input.sock"
+#define INPUT_SOCKET "/tmp/q2-weather-view.input.sock"
 #define BROWSE_SOCKET "/tmp/q2-weather.browse.sock"
 #define STATE_PATH "/mnt/mmc/.weather/state"
 #define SERVICE_PATH "/mnt/mmc/.weather/q2-weather"
