@@ -13,6 +13,8 @@ typedef struct {
     int theme_light;
     int theme_id;
     int theme_accent;
+    int wheel_percent;
+    int language_id;
     int ready;
     int detailed;
     int redraw;
