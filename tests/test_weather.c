@@ -24,15 +24,14 @@ static WeatherBackend backend(Fake*f){
 int main(void){
  WeatherApp app;weather_init(&app);
  assert(weather_set_location(&app,1,"Da Lat",11.94,108.44)==0);
- assert(weather_set_location(&app,2,"Hanoi",21.03,105.85)==0);
  Fake f={0};WeatherBackend b=backend(&f);
- assert(weather_refresh(&app,&b,1)==0);
- assert(f.enabled==1&&f.disabled==1&&!f.on&&f.requests==3);
+ assert(weather_on_open(&app,&b)==0);
+ assert(f.enabled==1&&f.disabled==1&&!f.on&&f.requests==2);
  assert(strcmp(app.locations[0].name,"Approximate City")==0);
  assert(app.locations[0].valid&&app.locations[1].temperature_c==22);
  char buf[1024];int n=weather_write(&app,buf,sizeof(buf));assert(n>0);
  WeatherApp restored;assert(weather_read(&restored,buf)==0);
- assert(restored.locations[2].valid&&strcmp(restored.locations[1].name,"Da Lat")==0);
+ assert(restored.locations[0].valid&&strcmp(restored.locations[1].name,"Da Lat")==0);
  f=(Fake){.on=1};b=backend(&f);
  assert(weather_refresh(&restored,&b,0)==0);
  assert(f.enabled==0&&f.disabled==0&&f.on==1);
@@ -46,6 +45,7 @@ int main(void){
  assert(weather_refresh(&app,&b,0)==WEATHER_FETCH);
  assert(f.enabled==1&&f.disabled==1);
  assert(weather_set_location(&app,1,"oops",100,0)==WEATHER_INVALID);
+ assert(weather_set_location(&app,2,"Hanoi",21.03,105.85)==WEATHER_INVALID);
  puts("weather state and Wi-Fi ownership tests passed");
  return 0;
 }
