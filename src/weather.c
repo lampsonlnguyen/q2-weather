@@ -16,6 +16,9 @@ int weather_set_location(WeatherApp *app,int slot,const char *name,double lat,do
         if((unsigned char)name[i]<32||name[i]=='|'||name[i]=='\r'||name[i]=='\n')
             return WEATHER_INVALID;
     WeatherLocation *l=&app->locations[slot];
+    if (l->used && fabs(l->latitude - lat) < 0.00001 &&
+        fabs(l->longitude - lon) < 0.00001 && !strcmp(l->name, name))
+        return WEATHER_OK;
     memset(l,0,sizeof(*l));memcpy(l->name,name,len+1);
     l->latitude=lat;l->longitude=lon;l->used=1;
     return WEATHER_OK;
