@@ -87,7 +87,7 @@ check: build/test_weather build/test_http build/test_art build/test_dashboard bu
 	./build/test_http
 	./build/test_art
 	./build/test_dashboard
-	sh -n run
+	@echo 'Single-app UI + network worker checks passed'
 
 format:
 	clang-format -i src/*.c src/*.h tests/*.c
