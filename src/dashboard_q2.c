@@ -81,7 +81,7 @@ static int service_command(const char *op, const char *arg, char *response, size
         return -1;
     }
     char request[256];
-    int count = snprintf(request, sizeof request, "Q2SPOT/1\\n1\\t%s\\t%s\\n",
+    int count = snprintf(request, sizeof request, "Q2SPOT/1\n1\t%s\t%s\n",
                          op, arg ? arg : "");
     if (count < 0 || count >= (int)sizeof request ||
         send(fd, request, (size_t)count, MSG_NOSIGNAL) != count) {
@@ -115,16 +115,16 @@ static void *city_lookup(void *unused) {
         for (int attempt = 0; attempt < 16 && !interrupted; attempt++) {
             sleep(1);
             if (service_command("cities", "", response, sizeof response)) continue;
-            const char *action = strstr(response, "\\naction\\tsavecity\\t");
+            const char *action = strstr(response, "\naction\tsavecity\t");
             if (!action) continue;
-            const char *subtitle = strchr(action + 17, '\\t');
-            const char *coords = subtitle ? strchr(subtitle + 1, '\\t') : NULL;
+            const char *subtitle = strchr(action + 17, '\t');
+            const char *coords = subtitle ? strchr(subtitle + 1, '\t') : NULL;
             double lat, lon;
             if (coords && sscanf(coords + 1, "%lf %lf", &lat, &lon) == 2) {
                 char value[90];
                 snprintf(value, sizeof value, "%.6f %.6f", lat, lon);
                 if (!service_command("savecity", value, response, sizeof response) &&
-                    strstr(response, "\\tok\\t")) {
+                    strstr(response, "\tok\t")) {
                     result = 2;
                 }
             }
