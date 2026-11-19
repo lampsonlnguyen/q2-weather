@@ -4,6 +4,7 @@
 #include "weather.h"
 
 #include <errno.h>
+#include <math.h>
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
@@ -343,7 +344,16 @@ static void page_location(Reply *r, int slot) {
                 info(r, date, subtitle);
             }
         }
-        if (loc->valid) info(r, "Last updated", "Latest available reading; may be cached");
+        if (loc->valid) {
+            char stamp[48];
+            time_t updated = (time_t)loc->updated_at;
+            struct tm local;
+            if (localtime_r(&updated, &local))
+                strftime(stamp, sizeof stamp, "%b %d, %I:%M %p", &local);
+            else
+                snprintf(stamp, sizeof stamp, "Cached reading");
+            info(r, "Last updated", stamp);
+        }
     }
     if (slot) {
         row(r, "list", "cities", "Change saved city", "Search for a city", "");
@@ -432,7 +442,7 @@ static void handle(char **args, int count, Reply *r) {
         int found = rt.search_found && !rt.search_pending;
         pthread_mutex_unlock(&state_mutex);
         if (!found || sscanf(arg, "%lf %lf", &lat, &lon) != 2 ||
-            lat != expected_lat || lon != expected_lon) {
+            fabs(lat - expected_lat) > 0.000001 || fabs(lon - expected_lon) > 0.000001) {
             snprintf(r->status, sizeof r->status, "error");
             snprintf(r->message, sizeof r->message, "Please search again");
         } else {
