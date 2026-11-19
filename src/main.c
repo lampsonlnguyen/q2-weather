@@ -188,9 +188,10 @@ static int weather_current(void *unused, double lat, double lon, int *temp, int 
     int highs[Q2_FORECAST_DAYS], lows[Q2_FORECAST_DAYS], rain[Q2_FORECAST_DAYS];
     int codes[Q2_FORECAST_DAYS];
     fc.ready = 0;
-    if (weather_request(lat, lon, temp, humidity, code, updated, dates, highs, lows, rain,
-                        codes, Q2_FORECAST_DAYS))
-        return -1;
+    int result = weather_request(lat, lon, temp, humidity, code, updated, dates, highs,
+                                 lows, rain, codes, Q2_FORECAST_DAYS);
+    if (result < 0) return -1;
+    if (result > 0) return 0; /* Current conditions succeeded without daily data. */
     for (int i = 0; i < Q2_FORECAST_DAYS; i++) {
         WeatherDay *day = &fc.days[i];
         snprintf(day->date, sizeof day->date, "%s", dates[i]);
@@ -338,8 +339,12 @@ static void page_location(Reply *r, int slot) {
                 display_number(hi, sizeof hi, d->high_c);
                 display_number(lo, sizeof lo, d->low_c);
                 snprintf(date, sizeof date, "%.10s", d->date);
-                snprintf(subtitle, sizeof subtitle, "%s / %s | Rain %d%% | %s", hi, lo,
-                         d->precipitation_pct, weather_description(d->weather_code));
+                if (d->precipitation_pct < 0)
+                    snprintf(subtitle, sizeof subtitle, "%s / %s | %s", hi, lo,
+                             weather_description(d->weather_code));
+                else
+                    snprintf(subtitle, sizeof subtitle, "%s / %s | Rain %d%% | %s", hi, lo,
+                             d->precipitation_pct, weather_description(d->weather_code));
                 info(r, date, subtitle);
             }
         }
@@ -395,6 +400,8 @@ static void page_menu(Reply *r) {
         info(r, "Wi-Fi is off", "Enable Wi-Fi in Q2 settings to refresh");
     else if (error)
         info(r, "Weather may be cached", "Refresh was unsuccessful");
+    if (error)
+        info(r, "Diagnostics", "See .weather/weather.log on the SD card");
 }
 
 static void page_cities(Reply *r) {
