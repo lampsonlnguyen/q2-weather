@@ -13,6 +13,7 @@ static void select_key(Dashboard *ui) {
             ui->search_request = 1;
             ui->search_result = 1;
             ui->page = 2;
+            ui->keyboard_index = 0;
         }
     } else if (key == '<') {
         if (ui->city_length) ui->city_query[--ui->city_length] = 0;
