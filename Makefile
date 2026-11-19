@@ -24,8 +24,9 @@ build/q2/%.o: src/%.c src/weather.h src/http.h | $(SYSROOT)/usr/include/errno.h
 	mkdir -p $(@D)
 	$(Q2_CC) $(Q2_FLAGS) $(Q2_CFLAGS) -c $< -o $@
 
-build/weather_sprites.inc: tools/draw_weather_icons.py
-	python3 tools/draw_weather_icons.py
+SPRITE_PNGS = $(wildcard assets/sprites/*.png)
+build/weather_sprites.inc: tools/pack_sprites.py $(SPRITE_PNGS)
+	python3 tools/pack_sprites.py
 
 build/icons/icon.png: build/weather_sprites.inc
 	@test -f $@
