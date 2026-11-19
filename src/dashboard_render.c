@@ -120,6 +120,17 @@ static void label(uint32_t *dst, unsigned stride, int x, int y, const char *s, i
     }
 }
 
+static int text_width(const char *s, int large) {
+    int width = 0;
+    for (; *s; ++s) {
+        unsigned char c = (unsigned char)*s;
+        if (c < 32 || c > 126) c = '?';
+        width += large ? weather_font_large_advance[c - 32]
+                       : weather_font_small_advance[c - 32];
+    }
+    return width;
+}
+
 static const char *condition(int code) {
     if (code == 0) return TR(CLEAR);
     if (code <= 2 && code >= 1) return TR(PARTLY_CLOUDY);
@@ -184,7 +195,7 @@ static void location(uint32_t *dst, unsigned stride, const Dashboard *ui, int sl
                  ui->units_f ? 'F' : 'C');
         label(dst, stride, 43, y + 36, temp, 2, TEXT, 9);
         snprintf(caption, sizeof caption, "%s %d%%", TR(HUMIDITY), loc->humidity);
-        label(dst, stride, 111, y + height - 23, caption, 1, DIM, 14);
+        label(dst, stride, 43, y + height - 23, caption, 1, DIM, 18);
     } else {
         label(dst, stride, 43, y + 39, TR(LOADING), 1, DIM, 21);
     }
@@ -200,7 +211,7 @@ static void location_choice(uint32_t *dst, unsigned stride, const Dashboard *ui,
     label(dst, stride, 43, y + 6, slot ? TR(SAVED_LOCATION) : TR(CURRENT_LOCATION), 1,
           DIM, 21);
     if (loc->used) {
-        label(dst, stride, 43, y + 27, loc->name, 2, TEXT, 25);
+        label(dst, stride, 43, y + 27, loc->name, 2, TEXT, 16);
         if (loc->valid) {
             char details[48];
             snprintf(details, sizeof details, "%d%c  %s", units(loc->temperature_c, ui->units_f),
@@ -246,10 +257,17 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
     rect(dst, stride, 0, 0, DASH_WIDTH, DASH_HEIGHT, BG);
     rect(dst, stride, 0, 0, DASH_WIDTH, 39, PANEL);
     rect(dst, stride, 0, 38, DASH_WIDTH, 1, BORDER);
-    if (ui->page) label(dst, stride, 43, 12, "< BACK", 1, TEXT, 9);
-    label(dst, stride, 157, 12, "WEATHER", 1, TEXT, 9);
+    if (ui->page) {
+        char back[48];
+        snprintf(back, sizeof back, "< %s", TR(BACK));
+        label(dst, stride, 42, 12, back, 1, TEXT, 12);
+    }
+    const char *title = TR(WEATHER);
+    label(dst, stride, (DASH_WIDTH - text_width(title, 0)) / 2, 12,
+          title, 1, TEXT, 24);
     if (ui->page == 0)
-        label(dst, stride, 276, 12, TR(SETTINGS), 1, HIGHLIGHT, 8);
+        label(dst, stride, 334 - text_width(TR(SETTINGS), 0), 12, TR(SETTINGS), 1,
+              HIGHLIGHT, 14);
     else
         label(dst, stride, 279, 12, "Q2 POD", 1, DIM, 8);
     if (ui->page == 3) {
@@ -287,7 +305,8 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             label(dst, stride, 40, 277, TR(UPDATED), 1, HIGHLIGHT, 34);
         else if (ui->search_result == -1)
             label(dst, stride, 40, 277, TR(NOT_FOUND), 1, GOLD, 34);
-        label(dst, stride, 40, 289, TR(ICON_CREDIT), 1, DIM, 40);
+        if (!ui->search_result)
+            label(dst, stride, 43, 280, TR(ICON_CREDIT), 1, DIM, 28);
         return;
     }
     if (ui->page == 0) {
@@ -295,7 +314,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         location_choice(dst, stride, ui, 0, 65);
         location_choice(dst, stride, ui, 1, 165);
         label(dst, stride, 40, 276, TR(SELECT_LOCATION), 1, DIM, 47);
-        label(dst, stride, 40, 289, "WHEEL SELECT  CENTER OPEN  BACK EXIT", 1, DIM, 45);
+        label(dst, stride, 42, 289, "CENTER OPEN   BACK EXIT", 1, DIM, 33);
         return;
     }
     if (ui->page == 1) {
@@ -314,7 +333,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             label(dst, stride, 258, 113, TR(NO_DATA), 1, DIM, 9);
         }
         forecast(dst, stride, ui);
-        label(dst, stride, 40, 289, "WHEEL DAY  CENTER DETAILS  BACK LOCATIONS", 1, DIM, 45);
+        label(dst, stride, 42, 289, "CENTER DETAILS   BACK LOCATIONS", 1, DIM, 39);
     } else {
         const WeatherLocation *loc = &ui->weather.locations[ui->slot];
         label(dst, stride, 40, 47, loc->used ? loc->name : "No location", 2, TEXT, 20);
@@ -338,6 +357,6 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         } else {
             label(dst, stride, 42, 113, TR(FORECAST_UNAVAILABLE), 1, DIM, 32);
         }
-        label(dst, stride, 40, 289, "WHEEL DAY  CENTER FORECAST  BACK", 1, DIM, 42);
+        label(dst, stride, 42, 289, "CENTER FORECAST   BACK", 1, DIM, 32);
     }
 }
