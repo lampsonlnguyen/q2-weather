@@ -483,6 +483,17 @@ static void handle(char **args, int count, Reply *r) {
     }
 }
 
+static int send_all(int fd, const char *data, size_t len) {
+    size_t sent = 0;
+    while (sent < len) {
+        ssize_t n = write(fd, data + sent, len - sent);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) return -1;
+        sent += (size_t)n;
+    }
+    return 0;
+}
+
 static void answer(int socket_fd) {
     char request[WIRE_MAX + 1], header[512], msg[384];
     Reply reply = {0};
@@ -516,8 +527,8 @@ static void answer(int socket_fd) {
     int hn = snprintf(header, sizeof header, "Q2SPOT/1\n%.20s\t%s\t%s\t\n", id,
                       reply.status, msg);
     if (hn > 0 && hn < (int)sizeof header) {
-        (void)write(socket_fd, header, (size_t)hn);
-        if (reply.used) (void)write(socket_fd, reply.rows, reply.used);
+        if (!send_all(socket_fd, header, (size_t)hn) && reply.used)
+            (void)send_all(socket_fd, reply.rows, reply.used);
     }
     close(socket_fd);
 }
