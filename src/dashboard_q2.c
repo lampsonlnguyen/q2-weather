@@ -2,6 +2,7 @@
 /* Full-screen graphical Library app. Its music/player audio remains untouched. */
 #include "dashboard.h"
 #include "theme.h"
+#include "lang.h"
 #include "weather.h"
 
 #include <errno.h>
@@ -158,6 +159,7 @@ static void read_theme(Dashboard *ui) {
         ui->theme_id = theme.style;
         ui->theme_accent = theme.accent;
         ui->wheel_percent = theme.wheel;
+        if (ui->language_id != theme.language) weather_language_select(theme.language);
         ui->language_id = theme.language;
         ui->redraw = 1;
     }
@@ -218,6 +220,7 @@ int main(void) {
     ui.units_f = load_units();
     ui.theme_accent = 0;
     ui.wheel_percent = 50;
+    weather_language_select(0);
     read_theme(&ui);
     (void)read_cache(&ui);
     pid_t service = start_service();
