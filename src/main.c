@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <poll.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,6 +30,10 @@ typedef struct {
     int error;
     int units_f;
     char search[80];
+    char search_name[Q2_WEATHER_NAME];
+    double search_lat, search_lon;
+    int search_pending, search_found, search_generation;
+    int generation, rerun;
 } Runtime;
 
 typedef struct {
@@ -41,6 +46,7 @@ typedef struct {
 
 static Runtime rt;
 static volatile sig_atomic_t stopped;
+static pthread_mutex_t state_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void stop_server(int signo) {
     (void)signo;
@@ -210,11 +216,91 @@ static const WeatherBackend backend = {
     NULL, wifi_state, wifi_power, wait_online, detect, weather_current, weather_daily
 };
 
+/* Network calls run outside the Library browser's 15-second request timeout. */
+static void *refresh_worker(void *unused) {
+    (void)unused;
+    for (;;) {
+        pthread_mutex_lock(&state_mutex);
+        WeatherApp snapshot = rt.app;
+        int generation = rt.generation;
+        pthread_mutex_unlock(&state_mutex);
+        int error = weather_on_open(&snapshot, &backend);
+        pthread_mutex_lock(&state_mutex);
+        if (generation == rt.generation) {
+            rt.app = snapshot;
+            rt.error = error;
+            save_state();
+        } else {
+            rt.rerun = 1;
+        }
+        int again = rt.rerun;
+        rt.rerun = 0;
+        if (!again) rt.pending = 0;
+        pthread_mutex_unlock(&state_mutex);
+        if (!again) break;
+    }
+    return NULL;
+}
+
 static void refresh(void) {
+    pthread_mutex_lock(&state_mutex);
+    if (rt.pending) {
+        rt.rerun = 1;
+        pthread_mutex_unlock(&state_mutex);
+        return;
+    }
     rt.pending = 1;
-    rt.error = weather_on_open(&rt.app, &backend);
-    rt.pending = 0;
-    save_state();
+    pthread_mutex_unlock(&state_mutex);
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, refresh_worker, NULL)) {
+        pthread_mutex_lock(&state_mutex);
+        rt.pending = 0;
+        rt.error = WEATHER_FETCH;
+        pthread_mutex_unlock(&state_mutex);
+    } else {
+        pthread_detach(thread);
+    }
+}
+
+/* City lookup also runs on a worker: field edits never block Q2 Pod. */
+static void *search_worker(void *unused) {
+    (void)unused;
+    char query[sizeof rt.search], city[Q2_WEATHER_NAME];
+    pthread_mutex_lock(&state_mutex);
+    snprintf(query, sizeof query, "%s", rt.search);
+    int generation = rt.search_generation;
+    pthread_mutex_unlock(&state_mutex);
+    double lat = 0, lon = 0;
+    int ok = !weather_geocode(query, city, sizeof city, &lat, &lon);
+    pthread_mutex_lock(&state_mutex);
+    if (generation == rt.search_generation) {
+        rt.search_found = ok;
+        if (ok) {
+            snprintf(rt.search_name, sizeof rt.search_name, "%s", city);
+            rt.search_lat = lat;
+            rt.search_lon = lon;
+        }
+        rt.search_pending = 0;
+    }
+    pthread_mutex_unlock(&state_mutex);
+    return NULL;
+}
+
+static void start_search(const char *query) {
+    pthread_mutex_lock(&state_mutex);
+    snprintf(rt.search, sizeof rt.search, "%s", query);
+    rt.search_generation++;
+    rt.search_pending = 1;
+    rt.search_found = 0;
+    pthread_mutex_unlock(&state_mutex);
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, search_worker, NULL)) {
+        pthread_mutex_lock(&state_mutex);
+        rt.search_pending = 0;
+        pthread_mutex_unlock(&state_mutex);
+    } else {
+        pthread_detach(thread);
+    }
 }
 
 static void display_number(char *out, size_t cap, int celsius) {
@@ -223,8 +309,17 @@ static void display_number(char *out, size_t cap, int celsius) {
 }
 
 static void page_location(Reply *r, int slot) {
-    WeatherLocation *loc = &rt.app.locations[slot];
+    WeatherLocation location;
+    pthread_mutex_lock(&state_mutex);
+    location = rt.app.locations[slot];
+    int pending = rt.pending;
+    pthread_mutex_unlock(&state_mutex);
+    WeatherLocation *loc = &location;
     char temp[32], subtitle[128], date[64], hi[32], lo[32];
+    if (pending) {
+        info(r, "Updating weather", "Using cached readings while fetching");
+        snprintf(r->message, sizeof r->message, "refresh");
+    }
     if (!loc->used) {
         info(r, slot ? "No saved city" : "Current city unavailable",
              slot ? "Choose a city below" : "Refresh to detect your city");
@@ -258,9 +353,20 @@ static void page_location(Reply *r, int slot) {
 }
 
 static void page_menu(Reply *r) {
+    WeatherApp app;
+    int pending, error;
+    pthread_mutex_lock(&state_mutex);
+    app = rt.app;
+    pending = rt.pending;
+    error = rt.error;
+    pthread_mutex_unlock(&state_mutex);
     char sub[128];
+    if (pending) {
+        info(r, "Updating both locations", "Weather requests in progress");
+        snprintf(r->message, sizeof r->message, "refresh");
+    }
     for (int i = 0; i < Q2_WEATHER_SLOTS; i++) {
-        WeatherLocation *l = &rt.app.locations[i];
+        WeatherLocation *l = &app.locations[i];
         if (l->used && l->valid) {
             char temp[24];
             display_number(temp, sizeof temp, l->temperature_c);
@@ -278,22 +384,28 @@ static void page_menu(Reply *r) {
         "Switch displayed temperature units", "");
     if (!wifi_preference_on())
         info(r, "Wi-Fi is off", "Enable Wi-Fi in Q2 settings to refresh");
-    else if (rt.error)
+    else if (error)
         info(r, "Weather may be cached", "Refresh was unsuccessful");
 }
 
 static void page_cities(Reply *r) {
+    char name[Q2_WEATHER_NAME], coord[80];
+    int pending, found;
+    double lat, lon;
+    pthread_mutex_lock(&state_mutex);
+    pending = rt.search_pending;
+    found = rt.search_found;
+    snprintf(name, sizeof name, "%s", rt.search_name);
+    lat = rt.search_lat;
+    lon = rt.search_lon;
+    pthread_mutex_unlock(&state_mutex);
     row(r, "field", "citysearch", "City name:", "Enter city to search", "");
-    if (rt.search[0]) {
-        char name[Q2_WEATHER_NAME];
-        double lat, lon;
-        if (weather_geocode(rt.search, name, sizeof name, &lat, &lon) == 0) {
-            char coord[80];
-            snprintf(coord, sizeof coord, "%.6f %.6f", lat, lon);
-            row(r, "action", "savecity", name, "Save this city", coord);
-        } else {
-            info(r, "City not found", "Check spelling and Wi-Fi");
-        }
+    if (pending) {
+        info(r, "Searching city", "Checking Open-Meteo");
+        snprintf(r->message, sizeof r->message, "refresh");
+    } else if (found) {
+        snprintf(coord, sizeof coord, "%.6f %.6f", lat, lon);
+        row(r, "action", "savecity", name, "Save this city", coord);
     }
 }
 
@@ -308,38 +420,52 @@ static void handle(char **args, int count, Reply *r) {
     else if (!strcmp(operation, "cities"))
         page_cities(r);
     else if (!strcmp(operation, "citysearch")) {
-        snprintf(rt.search, sizeof rt.search, "%s", arg);
+        start_search(arg);
         page_cities(r);
     } else if (!strcmp(operation, "savecity")) {
         double lat, lon;
-        if (sscanf(arg, "%lf %lf", &lat, &lon) != 2 ||
-            weather_set_location(&rt.app, 1, rt.search, lat, lon)) {
+        char city[Q2_WEATHER_NAME];
+        pthread_mutex_lock(&state_mutex);
+        snprintf(city, sizeof city, "%s", rt.search_name);
+        double expected_lat = rt.search_lat;
+        double expected_lon = rt.search_lon;
+        int found = rt.search_found && !rt.search_pending;
+        pthread_mutex_unlock(&state_mutex);
+        if (!found || sscanf(arg, "%lf %lf", &lat, &lon) != 2 ||
+            lat != expected_lat || lon != expected_lon) {
             snprintf(r->status, sizeof r->status, "error");
-            snprintf(r->message, sizeof r->message, "Invalid city");
+            snprintf(r->message, sizeof r->message, "Please search again");
         } else {
-            char city[Q2_WEATHER_NAME];
-            double checked_lat, checked_lon;
-            if (!weather_geocode(rt.search, city, sizeof city, &checked_lat, &checked_lon) &&
-                weather_set_location(&rt.app, 1, city, checked_lat, checked_lon) == 0) {
+            pthread_mutex_lock(&state_mutex);
+            int good = weather_set_location(&rt.app, 1, city, lat, lon) == WEATHER_OK;
+            if (good) {
+                rt.generation++;
                 save_state();
+            }
+            pthread_mutex_unlock(&state_mutex);
+            if (good) {
                 refresh();
-                snprintf(r->message, sizeof r->message, "Saved location updated");
+                snprintf(r->message, sizeof r->message, "Saved city; updating weather");
             } else {
                 snprintf(r->status, sizeof r->status, "error");
-                snprintf(r->message, sizeof r->message, "City lookup failed");
+                snprintf(r->message, sizeof r->message, "Invalid city");
             }
         }
     } else if (!strcmp(operation, "clear")) {
+        pthread_mutex_lock(&state_mutex);
         memset(&rt.app.locations[1], 0, sizeof rt.app.locations[1]);
+        rt.generation++;
         save_state();
+        pthread_mutex_unlock(&state_mutex);
         snprintf(r->message, sizeof r->message, "Saved city removed");
     } else if (!strcmp(operation, "units")) {
+        pthread_mutex_lock(&state_mutex);
         rt.units_f = !rt.units_f;
+        pthread_mutex_unlock(&state_mutex);
         snprintf(r->message, sizeof r->message, "Temperature units changed");
     } else if (!strcmp(operation, "refresh")) {
         refresh();
-        snprintf(r->message, sizeof r->message, rt.error ? "Refresh failed; cached weather kept"
-                                                       : "Weather updated");
+        snprintf(r->message, sizeof r->message, "Updating both locations");
     } else {
         snprintf(r->status, sizeof r->status, "unsupported");
     }
