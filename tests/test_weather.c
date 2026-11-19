@@ -53,6 +53,7 @@ int main(void){
  f=(Fake){.fail_geo=1};b=backend(&f);
  assert(weather_refresh(&app,&b,1)==WEATHER_GEO);
  assert(f.enabled==1&&f.disabled==1);
+ assert(f.requests==1); /* Saved city still refreshes if IP lookup fails. */
  f=(Fake){.fail_weather=1};b=backend(&f);
  assert(weather_refresh(&app,&b,0)==WEATHER_FETCH);
  assert(f.enabled==1&&f.disabled==1);
