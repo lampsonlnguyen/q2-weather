@@ -10,7 +10,7 @@ Q2_LDFLAGS = -m elf32ltsmip -e __start --dynamic-linker /lib/ld-linux-mipsn8.so.
 	--image-base=0x400000 -z noexecstack --hash-style=sysv --build-id=none -s
 Q2_SRC = src/main.c src/http.c src/weather.c src/art.c src/crt-q2.c
 Q2_OBJ = $(patsubst src/%.c,build/q2/%.o,$(Q2_SRC))
-DASH_SRC = src/dashboard.c src/dashboard_render.c src/dashboard_q2.c src/art.c src/weather.c src/crt-q2.c
+DASH_SRC = src/dashboard.c src/dashboard_render.c src/dashboard_q2.c src/theme.c src/art.c src/weather.c src/crt-q2.c
 DASH_OBJ = $(patsubst src/%.c,build/dashboard/%.o,$(DASH_SRC))
 DIST = dist/.weather
 
@@ -85,16 +85,21 @@ build/test_art: src/art.c src/art.h tests/test_art.c
 	mkdir -p build
 	$(CC) -std=gnu11 -DHOST -O2 -Wall -Wextra -Werror -o $@ src/art.c tests/test_art.c
 
+build/test_theme: tests/test_theme.c src/theme.c src/theme.h
+	mkdir -p build
+	$(CC) $(CFLAGS) -o $@ tests/test_theme.c src/theme.c
+
 build/test_dashboard: tests/test_dashboard.c src/dashboard.c src/dashboard.h src/weather.h
 	mkdir -p build
 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -o $@ tests/test_dashboard.c src/dashboard.c
 
 host: build/host/q2-weather
 
-check: build/test_weather build/test_http build/test_art build/test_dashboard build/host/q2-weather
+check: build/test_weather build/test_http build/test_art build/test_theme build/test_dashboard build/host/q2-weather
 	./build/test_weather
 	./build/test_http
 	./build/test_art
+	./build/test_theme
 	./build/test_dashboard
 	@echo 'Single-app UI + network worker checks passed'
 
@@ -106,7 +111,7 @@ format-check:
 
 clean:
 	# Preserve build/sysroot and build/q2-rootfs.squashfs: these are expensive to recreate.
-	rm -rf build/q2 build/dashboard build/host build/weather_sprites.inc build/icons build/test_weather build/test_http build/test_art build/test_dashboard dist
+	rm -rf build/q2 build/dashboard build/host build/weather_sprites.inc build/icons build/test_weather build/test_http build/test_art build/test_theme build/test_dashboard dist
 
 clean-all:
 	rm -rf build dist
