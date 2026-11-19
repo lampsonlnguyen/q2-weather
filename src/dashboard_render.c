@@ -145,8 +145,48 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
     rect(dst, stride, 0, 0, DASH_WIDTH, 39, PANEL);
     rect(dst, stride, 0, 38, DASH_WIDTH, 1, 0x35546au);
     label(dst, stride, 14, 11, ui->detailed ? "< BACK" : "Q2 WEATHER", 1, TEXT, 22);
-    label(dst, stride, 277, 11, "OFFLINE OK", 1, DIM, 12);
-    if (!ui->detailed) {
+    if (ui->page == 0)
+        label(dst, stride, 287, 11, "SETTINGS", 1, HIGHLIGHT, 8);
+    else
+        label(dst, stride, 287, 11, "WEATHER", 1, DIM, 8);
+    if (ui->page == 3) {
+        label(dst, stride, 14, 51, "SEARCH CITY", 2, TEXT, 20);
+        label(dst, stride, 14, 67, ui->city_query, 1, HIGHLIGHT, 40);
+        const char *keys = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _<+";
+        for (int i = 0; keys[i]; ++i) {
+            int x = 14 + (i % 6) * 58, y = 80 + (i / 6) * 32;
+            rect(dst, stride, x, y, 53, 29, ui->keyboard_index == i ? PANEL_LIGHT : PANEL);
+            frame(dst, stride, x, y, 53, 29, ui->keyboard_index == i ? HIGHLIGHT : 0x345166u);
+            char letter[2] = {keys[i], 0};
+            if (letter[0] == '_') letter[0] = ' ';
+            label(dst, stride, x + 20, y + 7, letter, 1, TEXT, 1);
+        }
+        label(dst, stride, 14, 300, "< BACKSPACE  + SEARCH", 1, DIM, 32);
+        return;
+    }
+    if (ui->page == 2) {
+        label(dst, stride, 14, 53, "SETTINGS", 2, TEXT, 16);
+        const char *titles[] = {"CHANGE SAVED CITY", "UNITS", "REFRESH WEATHER", "CLEAR SAVED CITY"};
+        for (int i = 0; i < 4; i++) {
+            int y = 76 + i * 48;
+            rect(dst, stride, 14, y, 346, 43, ui->keyboard_index == i ? PANEL_LIGHT : PANEL);
+            frame(dst, stride, 14, y, 346, 43,
+                  ui->keyboard_index == i ? HIGHLIGHT : 0x345166u);
+            label(dst, stride, 24, y + 12, titles[i], 1, TEXT, 25);
+            if (i == 1)
+                label(dst, stride, 292, y + 12, ui->units_f ? "FAHR" : "CELS", 1,
+                      HIGHLIGHT, 5);
+        }
+        if (ui->search_result == 1)
+            label(dst, stride, 14, 277, "Searching city...", 1, GOLD, 34);
+        else if (ui->search_result == 2)
+            label(dst, stride, 14, 277, "Saved city updated", 1, HIGHLIGHT, 34);
+        else if (ui->search_result == -1)
+            label(dst, stride, 14, 277, "City not found - retry", 1, GOLD, 34);
+        label(dst, stride, 14, 300, "WHEEL SELECT  CENTER OPEN  BACK", 1, DIM, 40);
+        return;
+    }
+    if (ui->page == 0) {
         location(dst, stride, ui, 0, 50, 70);
         location(dst, stride, ui, 1, 126, 57);
         const WeatherLocation *loc = &ui->weather.locations[ui->slot];
