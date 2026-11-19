@@ -18,8 +18,18 @@ static int forecast(void*p,double a,double b,int*t,int*h,int*c,long*stamp){
  if(f->fail_weather)return -1;
  *t=22;*h=65;*c=3;*stamp=1795000000;return 0;
 }
+static int forecast_days(void*p,double lat,double lon,WeatherDay *days,int count){
+ Fake*f=p;assert(count==Q2_FORECAST_DAYS);assert(lat>=-90&&lon<=180);
+ if(f->fail_weather)return -1;
+ for(int i=0;i<count;i++){
+  snprintf(days[i].date,sizeof(days[i].date),"2026-11-%02d",18+i);
+  days[i].high_c=23+i;days[i].low_c=12+i;
+  days[i].precipitation_pct=15;days[i].weather_code=3;
+ }
+ return 0;
+}
 static WeatherBackend backend(Fake*f){
- WeatherBackend b={f,state,power,online,geo,forecast};return b;
+ WeatherBackend b={f,state,power,online,geo,forecast,forecast_days};return b;
 }
 int main(void){
  WeatherApp app;weather_init(&app);
@@ -29,6 +39,8 @@ int main(void){
  assert(f.enabled==1&&f.disabled==1&&!f.on&&f.requests==2);
  assert(strcmp(app.locations[0].name,"Approximate City")==0);
  assert(app.locations[0].valid&&app.locations[1].temperature_c==22);
+ assert(app.locations[0].forecast_valid&&app.locations[1].forecast_valid);
+ assert(app.locations[1].days[6].high_c==29);
  char buf[1024];int n=weather_write(&app,buf,sizeof(buf));assert(n>0);
  WeatherApp restored;assert(weather_read(&restored,buf)==0);
  assert(restored.locations[0].valid&&strcmp(restored.locations[1].name,"Da Lat")==0);
