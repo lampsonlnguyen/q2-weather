@@ -40,6 +40,8 @@ int main(void){
  assert(strcmp(app.locations[0].name,"Approximate City")==0);
  assert(app.locations[0].valid&&app.locations[1].temperature_c==22);
  assert(app.locations[0].forecast_valid&&app.locations[1].forecast_valid);
+ assert(weather_set_location(&app,0,"Approximate City",33.7700001,-117.94)==WEATHER_OK);
+ assert(app.locations[0].valid&&app.locations[0].forecast_valid);
  assert(app.locations[1].days[6].high_c==29);
  char buf[1024];int n=weather_write(&app,buf,sizeof(buf));assert(n>0);
  WeatherApp restored;assert(weather_read(&restored,buf)==0);
