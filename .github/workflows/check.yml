@@ -77,7 +77,7 @@ jobs:
               --title "$RELEASE_TAG (device test)"
           fi
 
-  publish_location_weather_v050:
+  publish_weather_icons_v051:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-24.04
@@ -88,17 +88,17 @@ jobs:
         with:
           name: q2-weather-card-app
           path: dist
-      - name: Publish v0.5.0 location-first Weather app
+      - name: Publish v0.5.1 illustrated weather icons
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TARGET_SHA: ${{ github.sha }}
         run: |
-          if gh release view v0.5.0 >/dev/null 2>&1; then
-            echo 'v0.5.0 already exists; leaving published version unchanged'
+          if gh release view v0.5.1 >/dev/null 2>&1; then
+            echo 'v0.5.1 already exists; leaving published version unchanged'
             exit 0
           fi
-          gh release create v0.5.0 dist/q2-weather.zip \
+          gh release create v0.5.1 dist/q2-weather.zip \
             --target "$TARGET_SHA" \
-            --title "Q2 Weather v0.5.0 — Location-first Forecast" \
-            --notes "One Library Weather app. Opens to Current Location and Saved Location. Selecting a location expands to its graphical seven-day dashboard and day details. Includes replaceable PNG sprite assets, light/dark high-contrast palettes from Q2 Pod settings, proportional sans-serif text, city search, units, refresh and offline cache. The second Weather Dashboard app is absent from this release. Delete the old .weather-view folder from previous installations. Physical Q2 testing is recommended."
+            --title "Q2 Weather v0.5.1 — Color Weather Icons" \
+            --notes "Replaceable, high-quality color weather artwork adapted from Tomorrow.io Weather Code Icons (CC BY 4.0) with attribution in assets/sprites/ATTRIBUTION.md and the Settings screen. Keeps the single location-first Weather app, Q2 theme-aware contrast, sans-serif text and offline forecast. Original Icons8 assets are not included because they require separate redistribution permission. Install ZIP over the .weather folder; delete legacy .weather-view if it remains on SD."
