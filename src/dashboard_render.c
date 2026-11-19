@@ -173,6 +173,34 @@ static void location(uint32_t *dst, unsigned stride, const Dashboard *ui, int sl
     }
 }
 
+/* The entry page mirrors the original Weather app: pick a location first. */
+static void location_choice(uint32_t *dst, unsigned stride, const Dashboard *ui,
+                            int slot, int y) {
+    const WeatherLocation *loc = &ui->weather.locations[slot];
+    uint32_t fill = slot == ui->slot ? PANEL_LIGHT : PANEL;
+    rect(dst, stride, 14, y, 346, 90, fill);
+    frame(dst, stride, 14, y, 346, 90, slot == ui->slot ? HIGHLIGHT : BORDER);
+    label(dst, stride, 27, y + 6, slot ? "SAVED LOCATION" : "CURRENT LOCATION", 1,
+          DIM, 21);
+    if (loc->used) {
+        label(dst, stride, 27, y + 27, loc->name, 2, TEXT, 25);
+        if (loc->valid) {
+            char details[48];
+            snprintf(details, sizeof details, "%d%c  %s", units(loc->temperature_c, ui->units_f),
+                     ui->units_f ? 'F' : 'C', condition(loc->weather_code));
+            label(dst, stride, 27, y + 64, details, 1, DIM, 28);
+            icon(dst, stride, 288, y + 20, loc->weather_code, 2);
+        } else {
+            label(dst, stride, 27, y + 64, "Loading weather...", 1, DIM, 26);
+        }
+    } else {
+        label(dst, stride, 27, y + 31,
+              slot ? "Add saved city" : "Locating...", 2, TEXT, 20);
+        label(dst, stride, 27, y + 64,
+              slot ? "Choose a city to track" : "Waiting for location", 1, DIM, 29);
+    }
+}
+
 static void forecast(uint32_t *dst, unsigned stride, const Dashboard *ui) {
     const WeatherLocation *loc = &ui->weather.locations[ui->slot];
     label(dst, stride, 14, 191, "7-DAY FORECAST", 1, TEXT, 20);
@@ -201,7 +229,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
     rect(dst, stride, 0, 0, DASH_WIDTH, DASH_HEIGHT, BG);
     rect(dst, stride, 0, 0, DASH_WIDTH, 39, PANEL);
     rect(dst, stride, 0, 38, DASH_WIDTH, 1, BORDER);
-    label(dst, stride, 14, 11, ui->detailed ? "< BACK" : "Q2 WEATHER", 1, TEXT, 22);
+    label(dst, stride, 14, 11, ui->page ? "< BACK" : "Q2 WEATHER", 1, TEXT, 22);
     if (ui->page == 0)
         label(dst, stride, 287, 11, "SETTINGS", 1, HIGHLIGHT, 8);
     else
@@ -244,8 +272,15 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         return;
     }
     if (ui->page == 0) {
-        location(dst, stride, ui, 0, 50, 70);
-        location(dst, stride, ui, 1, 126, 57);
+        label(dst, stride, 14, 48, "LOCATIONS", 1, DIM, 15);
+        location_choice(dst, stride, ui, 0, 65);
+        location_choice(dst, stride, ui, 1, 165);
+        label(dst, stride, 14, 276, "SELECT A LOCATION TO VIEW FORECAST", 1, DIM, 47);
+        label(dst, stride, 14, 298, "WHEEL SELECT  CENTER OPEN  BACK EXIT", 1, DIM, 45);
+        return;
+    }
+    if (ui->page == 1) {
+        location(dst, stride, ui, ui->slot, 50, 133);
         const WeatherLocation *loc = &ui->weather.locations[ui->slot];
         rect(dst, stride, 244, 50, 116, 133, PANEL);
         frame(dst, stride, 244, 50, 116, 133, BORDER);
@@ -260,7 +295,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             label(dst, stride, 263, 113, "NO DATA", 1, DIM, 9);
         }
         forecast(dst, stride, ui);
-        label(dst, stride, 14, 293, "WHEEL DAY  CENTER DETAILS  BACK EXIT", 1, DIM, 45);
+        label(dst, stride, 14, 293, "WHEEL DAY  CENTER DETAILS  BACK LOCATIONS", 1, DIM, 45);
     } else {
         const WeatherLocation *loc = &ui->weather.locations[ui->slot];
         label(dst, stride, 14, 45, loc->used ? loc->name : "No location", 2, TEXT, 20);
@@ -284,6 +319,6 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         } else {
             label(dst, stride, 22, 113, "Forecast unavailable", 1, DIM, 32);
         }
-        label(dst, stride, 14, 281, "WHEEL DAY  CENTER OVERVIEW  BACK", 1, DIM, 42);
+        label(dst, stride, 14, 281, "WHEEL DAY  CENTER FORECAST  BACK", 1, DIM, 42);
     }
 }
