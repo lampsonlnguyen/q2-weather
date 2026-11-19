@@ -44,6 +44,8 @@ int main(void){
  char buf[1024];int n=weather_write(&app,buf,sizeof(buf));assert(n>0);
  WeatherApp restored;assert(weather_read(&restored,buf)==0);
  assert(restored.locations[0].valid&&strcmp(restored.locations[1].name,"Da Lat")==0);
+ assert(restored.locations[1].forecast_valid);
+ assert(restored.locations[1].days[6].high_c==29);
  f=(Fake){.on=1};b=backend(&f);
  assert(weather_refresh(&restored,&b,0)==0);
  assert(f.enabled==0&&f.disabled==0&&f.on==1);
