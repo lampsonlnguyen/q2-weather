@@ -271,19 +271,41 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
     else
         label(dst, stride, 279, 12, "Q2 POD", 1, DIM, 8);
     if (ui->page == 3) {
-        label(dst, stride, 43, 56, TR(SEARCH_CITY), 2, TEXT, 20);
-        rect(dst, stride, 34, 111, 307, 107, PANEL);
-        frame(dst, stride, 34, 111, 307, 107, BORDER);
-        if (ui->native_keyboard) {
-            label(dst, stride, 48, 127, TR(SYSTEM_KEYBOARD), 1, HIGHLIGHT, 30);
-            label(dst, stride, 48, 157, TR(TYPE_CITY), 1, TEXT, 36);
-            label(dst, stride, 48, 182, TR(DONE_SEARCH), 1, DIM, 34);
-        } else {
-            label(dst, stride, 48, 126, TR(KEYBOARD_UNAVAILABLE), 1, GOLD, 36);
-            label(dst, stride, 48, 158, TR(UPDATE_FIRMWARE), 1, TEXT, 32);
-            label(dst, stride, 48, 181, TR(ENABLE_INPUT), 1, DIM, 36);
+        label(dst, stride, 43, 49, TR(SEARCH_CITY), 1, TEXT, 23);
+        rect(dst, stride, 33, 72, 309, 34, PANEL);
+        frame(dst, stride, 33, 72, 309, 34, HIGHLIGHT);
+        label(dst, stride, 45, 80, ui->city_length ? ui->city_query : "City name...",
+              1, ui->city_length ? TEXT : DIM, 35);
+        static const char *const rows[] = {
+            "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"
+        };
+        const int offsets[] = {32, 47, 78};
+        const int starts[] = {0, 10, 19};
+        const int tops[] = {115, 154, 193};
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; rows[row][col]; ++col) {
+                int index = starts[row] + col;
+                int x = offsets[row] + col * 31;
+                int y = tops[row];
+                int selected = ui->keyboard_index == index;
+                rect(dst, stride, x, y, 29, 32, selected ? HIGHLIGHT : PANEL_LIGHT);
+                frame(dst, stride, x, y, 29, 32, selected ? HIGHLIGHT : BORDER);
+                char letter[] = {rows[row][col], 0};
+                int width = text_width(letter, 0);
+                label(dst, stride, x + (29 - width) / 2, y + 8, letter, 1,
+                      selected ? BG : TEXT, 1);
+            }
         }
-        label(dst, stride, 42, 287, "BACK  LOCATIONS AND SETTINGS", 1, DIM, 35);
+        static const char *const actions[] = {"SPACE", "DELETE", "SEARCH"};
+        for (int i = 0; i < 3; i++) {
+            int x = 47 + i * 93;
+            int selected = ui->keyboard_index == 26 + i;
+            rect(dst, stride, x, 238, 89, 37, selected ? HIGHLIGHT : PANEL);
+            frame(dst, stride, x, 238, 89, 37, selected ? HIGHLIGHT : BORDER);
+            label(dst, stride, x + (89 - text_width(actions[i], 0)) / 2,
+                  248, actions[i], 1, selected ? BG : TEXT, 10);
+        }
+        label(dst, stride, 42, 289, "WHEEL SELECT   CENTER TYPE   BACK", 1, DIM, 39);
         return;
     }
     if (ui->page == 2) {
