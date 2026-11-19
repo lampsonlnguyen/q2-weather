@@ -16,10 +16,10 @@ trap 'rm -rf "$tmp"' EXIT
 while read -r checksum relative; do
     curl -fsSL --retry 3 "https://archive.debian.org/debian/pool/main/$relative" -o "$tmp/p.deb"
     if [ "${#checksum}" -ne 64 ]; then
-        printf 'Pin this Debian package SHA-256: %s  %s\\n' "$(sha256sum "$tmp/p.deb" | cut -d' ' -f1)" "$relative" >&2
+        printf 'Pin this Debian package SHA-256: %s  %s\n' "$(sha256sum "$tmp/p.deb" | cut -d' ' -f1)" "$relative" >&2
         exit 1
     fi
-    printf '%s  %s\\n' "$checksum" "$tmp/p.deb" | sha256sum -c --quiet
+    printf '%s  %s\n' "$checksum" "$tmp/p.deb" | sha256sum -c --quiet
     ( cd "$tmp" && ar x p.deb data.tar.xz && tar -xJf data.tar.xz -C "$out" ./usr/include )
     rm -f "$tmp/p.deb" "$tmp/data.tar.xz"
 done <<'PACKAGES'
