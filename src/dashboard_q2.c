@@ -62,20 +62,6 @@ static pid_t start_service(void) {
     return pid > 0 ? pid : -1;
 }
 
-static void request_refresh(void) {
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return;
-    struct sockaddr_un addr = {0};
-    addr.sun_family = AF_UNIX;
-    snprintf(addr.sun_path, sizeof addr.sun_path, "%s", BROWSE_SOCKET);
-    if (!connect(fd, (struct sockaddr *)&addr, sizeof addr)) {
-        const char message[] = "Q2SPOT/1\n1\trefresh\t\n";
-        (void)send(fd, message, sizeof message - 1, MSG_NOSIGNAL);
-        shutdown(fd, SHUT_WR);
-    }
-    close(fd);
-}
-
 static int read_cache(Dashboard *ui) {
     char text[4096];
     FILE *file = fopen(STATE_PATH, "rb");
