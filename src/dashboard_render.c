@@ -23,24 +23,39 @@ static Palette palette;
 #define RAIN palette.rain
 
 static void choose_palette(const Dashboard *ui) {
-    if (ui->theme_light) {
-        palette = (Palette){0xf7f8fau, 0xffffffffu, 0xe9f2f7u,
-                            0x9eb7c7u, 0x075e82u, 0x172738u, 0x425667u,
-                            0x825000u, 0x075e9au};
-    } else {
-        palette = (Palette){0x111b28u, 0x202c3du, 0x304459u,
-                            0x668198u, 0x80dcf1u, 0xf5f8fcu, 0xc4d1deu,
-                            0xffd16bu, 0x83c6f5u};
+    /* iPod-inspired neutral system surfaces, not a fixed cyan/Astra look.
+     * Minimal, Classic and Modern each have distinct light/dark surfaces. */
+    if (ui->theme_id == 1) { /* Classic: ivory/silver with glossy selection */
+        palette = ui->theme_light
+                      ? (Palette){0xf8f8f6u, 0xffffffffu, 0xe4e7ebu, 0xa6a8abu,
+                                  0x007dbeu, 0x191a1bu, 0x52565bu, 0x976900u, 0x3168a3u}
+                      : (Palette){0x111112u, 0x242426u, 0x3b3b3du, 0x5d6066u,
+                                  0x5da7eeu, 0xf7f8f9u, 0xd5d7dau, 0xffca63u, 0x91b8edu};
+    } else if (ui->theme_id == 2) { /* Modern: flatter iPod-style cards */
+        palette = ui->theme_light
+                      ? (Palette){0xf5f5f6u, 0xffffffffu, 0xeceef2u, 0xaaaeb6u,
+                                  0x234a9du, 0x1a1a1cu, 0x484d58u, 0x875900u, 0x245d9au}
+                      : (Palette){0x121316u, 0x22242au, 0x343741u, 0x646a75u,
+                                  0xaab5d5u, 0xf8f8fau, 0xc5cad4u, 0xffd06bu, 0x94bff1u};
+    } else { /* Minimal: monochrome graphite with the user's accent */
+        palette = ui->theme_light
+                      ? (Palette){0xf8f8f8u, 0xffffffffu, 0xe8e8e8u, 0xb1b1b1u,
+                                  0x4d4d4du, 0x171717u, 0x505050u, 0x845a06u, 0x255e9du}
+                      : (Palette){0x101010u, 0x202020u, 0x383838u, 0x707070u,
+                                  0xbcbcbcu, 0xf6f6f6u, 0xd1d1d1u, 0xffd477u, 0x9ac8f5u};
     }
-    static const uint32_t dark_accent[] = {0xaab6c5u, 0xff8893u, 0x80dcf1u,
-                                           0xffd48fu, 0x92b8ffu, 0xffb47eu,
-                                           0xcf9dffu, 0xf5f0d5u, 0x88dbaeu};
-    static const uint32_t light_accent[] = {0x455668u, 0x972d40u, 0x075e82u,
-                                            0x825000u, 0x244a90u, 0x93420au,
-                                            0x63368fu, 0x5a4c2bu, 0x176944u};
-    int i = ui->theme_accent;
-    if (i < 0 || i >= 9) i = ui->theme_id == 2 ? 4 : 2;
-    palette.highlight = ui->theme_light ? light_accent[i] : dark_accent[i];
+    /* Higher contrast than the stock tint for legibility on the small Q2. */
+    static const uint32_t dark_accent[] = {
+        0xbfc1c4u, 0xff8295u, 0x90dbd4u, 0xe0c88cu, 0x9bbcffu,
+        0xffb487u, 0xdb9fcfu, 0xf2e3c1u, 0xb9dc89u, 0x7ebfffu
+    };
+    static const uint32_t light_accent[] = {
+        0x464646u, 0x9c213fu, 0x086a69u, 0x6f5918u, 0x1d4e9au,
+        0x8b410au, 0x77294fu, 0x5c4b25u, 0x436521u, 0x075e9cu
+    };
+    int accent = ui->theme_accent;
+    if (accent < 0 || accent > 9) accent = 0;
+    palette.highlight = ui->theme_light ? light_accent[accent] : dark_accent[accent];
 }
 
 static void rect(uint32_t *dst, unsigned stride, int x, int y, int w, int h, uint32_t col) {
