@@ -28,6 +28,7 @@ typedef struct {
     int search_result; /* 0 idle, 1 searching, 2 saved, -1 not found */
     char city_query[48];
     int city_length;
+    int native_keyboard;
 } Dashboard;
 void dashboard_init(Dashboard *ui);
 int dashboard_input(Dashboard *ui, const char *event);
