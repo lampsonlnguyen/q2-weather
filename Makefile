@@ -10,11 +10,9 @@ Q2_LDFLAGS = -m elf32ltsmip -e __start --dynamic-linker /lib/ld-linux-mipsn8.so.
 	--image-base=0x400000 -z noexecstack --hash-style=sysv --build-id=none -s
 Q2_SRC = src/main.c src/http.c src/weather.c src/art.c src/crt-q2.c
 Q2_OBJ = $(patsubst src/%.c,build/q2/%.o,$(Q2_SRC))
-DIST = dist/.weather
-DASH = dist/.weather-view
 DASH_SRC = src/dashboard.c src/dashboard_render.c src/dashboard_q2.c src/art.c src/weather.c src/crt-q2.c
 DASH_OBJ = $(patsubst src/%.c,build/dashboard/%.o,$(DASH_SRC))
-SPRITES = $(addprefix build/icons/,sunny.jpg partly.jpg cloudy.jpg overcast.jpg fog.jpg drizzle.jpg rain.jpg showers.jpg thunder.jpg snow.jpg snowshowers.jpg night.jpg nightcloud.jpg wind.jpg humidity.jpg icon.png icon-40.png)
+DIST = dist/.weather
 
 all: dist/q2-weather.zip
 
@@ -29,59 +27,37 @@ build/q2/%.o: src/%.c src/weather.h src/http.h | $(SYSROOT)/usr/include/errno.h
 build/weather_sprites.inc: tools/draw_weather_icons.py
 	python3 tools/draw_weather_icons.py
 
-build/dashboard/render.stamp: build/weather_sprites.inc
-	@mkdir -p $(@D)
-	@touch $@
+build/icons/icon.png: build/weather_sprites.inc
+	@test -f $@
 
 build/dashboard/dashboard_render.o: build/weather_sprites.inc
 build/dashboard/%.o: src/%.c src/dashboard.h src/weather.h src/art.h | $(SYSROOT)/usr/include/errno.h
 	mkdir -p $(@D)
 	$(Q2_CC) $(Q2_FLAGS) $(Q2_CFLAGS) -Ibuild -c $< -o $@
 
-$(DASH)/q2-weather-view: $(DASH_OBJ)
-	mkdir -p $(@D)
-	$(Q2_LD) $(Q2_LDFLAGS) -o $@ $^ $(SYSROOT)/lib/libc.so.6 \
-		$(SYSROOT)/lib/libm.so.6 $(SYSROOT)/lib/libpthread.so.0 \
-		$(SYSROOT)/lib/libgcc_s.so.1 $(SYSROOT)/lib/ld-linux-mipsn8.so.1
-
-$(DASH)/q2app: .weather-dashboard-q2app
-	mkdir -p $(@D)
-	cp $< $@
-
-$(DASH)/icon.png: build/icons/icon.png
-	mkdir -p $(@D)
-	cp $< $@
-
-$(DIST)/q2-weather: $(Q2_OBJ)
+$(DIST)/q2-weather-service: $(Q2_OBJ)
 	mkdir -p $(@D)
 	$(Q2_LD) $(Q2_LDFLAGS) -o $@ $^ $(SYSROOT)/lib/libc.so.6 \
 		$(SYSROOT)/lib/libm.so.6 $(SYSROOT)/lib/libpthread.so.0 \
 		$(SYSROOT)/lib/libgcc_s.so.1 $(SYSROOT)/lib/libcurl.so.4 \
 		$(SYSROOT)/lib/ld-linux-mipsn8.so.1
 
-build/icons/sunny.jpg: tools/draw_weather_icons.py
-	python3 tools/draw_weather_icons.py
-
-$(filter-out build/icons/sunny.jpg,$(SPRITES)): build/icons/sunny.jpg
-	@test -f $@
-
-$(DIST)/icons.stamp: $(SPRITES)
-	mkdir -p $(DIST)/icons
-	cp build/icons/*.jpg $(DIST)/icons/
-	cp build/icons/icon.png build/icons/icon-40.png $(DIST)/
-	@touch $@
+$(DIST)/q2-weather: $(DASH_OBJ)
+	mkdir -p $(@D)
+	$(Q2_LD) $(Q2_LDFLAGS) -o $@ $^ $(SYSROOT)/lib/libc.so.6 \
+		$(SYSROOT)/lib/libm.so.6 $(SYSROOT)/lib/libpthread.so.0 \
+		$(SYSROOT)/lib/libgcc_s.so.1 $(SYSROOT)/lib/ld-linux-mipsn8.so.1
 
 $(DIST)/q2app: q2app
 	mkdir -p $(@D)
 	cp $< $@
 
-$(DIST)/run: run
+$(DIST)/icon.png: build/icons/icon.png
 	mkdir -p $(@D)
 	cp $< $@
-	chmod 755 $@
 
-dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/q2app $(DIST)/run $(DIST)/icons.stamp $(DASH)/q2-weather-view $(DASH)/q2app $(DASH)/icon.png
-	cd dist && zip -qX q2-weather.zip .weather/q2-weather .weather/q2app .weather/run .weather/icon.png .weather/icon-40.png .weather/icons/*.jpg .weather-view/q2-weather-view .weather-view/q2app .weather-view/icon.png
+dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/q2-weather-service $(DIST)/q2app $(DIST)/icon.png
+	cd dist && zip -qX q2-weather.zip .weather/q2-weather .weather/q2-weather-service .weather/q2app .weather/icon.png
 
 build/test_weather: src/weather.c src/weather.h tests/test_weather.c
 	mkdir -p build
@@ -121,7 +97,7 @@ format-check:
 
 clean:
 	# Preserve build/sysroot and build/q2-rootfs.squashfs: these are expensive to recreate.
-	rm -rf build/q2 build/dashboard build/host build/weather_sprites.inc build/test_weather build/test_http build/test_art build/test_dashboard dist
+	rm -rf build/q2 build/dashboard build/host build/weather_sprites.inc build/icons build/test_weather build/test_http build/test_art build/test_dashboard dist
 
 clean-all:
 	rm -rf build dist
