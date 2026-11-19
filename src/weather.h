@@ -2,7 +2,8 @@
 #ifndef Q2_WEATHER_H
 #define Q2_WEATHER_H
 #include <stddef.h>
-#define Q2_WEATHER_SLOTS 3
+#define Q2_WEATHER_SLOTS 2
+/* Slot 0: network current location; slot 1: user-saved city. */
 #define Q2_WEATHER_NAME 64
 typedef struct {
     char name[Q2_WEATHER_NAME];
@@ -24,6 +25,8 @@ enum { WEATHER_OK=0, WEATHER_INVALID=-1, WEATHER_RADIO=-2, WEATHER_OFFLINE=-3, W
 void weather_init(WeatherApp *);
 int weather_set_location(WeatherApp *,int slot,const char *name,double lat,double lon);
 int weather_refresh(WeatherApp *,const WeatherBackend *,int detect_current);
+/* Call once on each application launch; always detects current location and refreshes both. */
+int weather_on_open(WeatherApp *,const WeatherBackend *);
 int weather_write(const WeatherApp *,char *,size_t);
 int weather_read(WeatherApp *,const char *);
 #endif
