@@ -1,43 +1,65 @@
 # Q2 Weather
 
-A weather application in development for the Shanling Q2 running [Q2 Pod](https://github.com/DiamondBond/q2-pod).
+An SD-card Library app for the Shanling Q2 running [DiamondBond's Q2 Pod](https://github.com/DiamondBond/q2-pod), using its native card-app browser. Current observations and seven days of weather for two locations.
 
-## Design
+## Features
 
-- Two location slots: **Current Location** (automatically detected using public-IP geolocation on each launch) and **Saved Location** (one user-selected city). Slot 0 is automatically managed; slot 1 is user-editable.
-- [Open-Meteo](https://open-meteo.com/en/docs) is the planned weather source. **No API key required** for non-commercial use.
-- [ipwho.is](https://ipwho.is/) is the planned public-IP geolocation service over HTTPS, requiring no key on its free public endpoint.
-- On **every app launch**, call `weather_on_open`: detect the current location and refresh both slots. Keep cached readings visible if offline and label them as cached.
-- Weather fields: Celsius temperature, humidity, WMO weather condition code, last-updated timestamp, plus **7 days of high/low temperatures, weather descriptions (WMO codes), and precipitation probability** for both locations.
-- Forecast data is fetched on every app launch alongside current conditions. The location-specific daily date comes from Open-Meteo's timezone-aware response.
-- When refreshing: read Wi-Fi radio state; if off, enable and connect to a saved network; query IP location (if requested); refresh weather for both locations; **disable Wi-Fi only if the app enabled it**. A failed request should still trigger restoration.
-- If Wi-Fi was already enabled, leave it enabled on success or failure.
-- Persist locations and last successful readings on the SD card, and show when cached weather is stale.
+- **Current Location:** approximate city detected from the Q2's public IP via [ipwho.is](https://ipwho.is/).
+- **Saved Location:** one city chosen with Q2 Pod's on-device text-entry keyboard, resolved through [Open-Meteo Geocoding](https://open-meteo.com/en/docs/geocoding-api).
+- **Current conditions:** temperature and relative humidity, plus a description based on the WMO code.
+- **Seven-day forecast:** daily high, low, rain probability and weather code for both cities.
+- **Automatically updates every time you open Weather.** The Library page is responsive while the network worker runs.
+- **Offline cache:** the last known weather and seven-day forecast are stored in `.weather/state`. A failed refresh retains the cached data.
+- Switch between Celsius and Fahrenheit, and refresh manually.
+- No API keys required for non-commercial use. Weather data comes from [Open-Meteo](https://open-meteo.com/en/docs).
 
-## Development status
+Public-IP geolocation is approximate and can show a nearby or different city, especially when using VPNs.
 
-**Current implementation is a portable, tested weather-state and Wi-Fi ownership core. It is not yet a runnable Q2 card application.** The device integration still needs firmware-specific radio controls, HTTPS fetching, JSON parsing, a UI, SD-card storage hooks and a MIPS cross-build. Do not install this repository on a Q2 yet.
+## Installation
 
-The launch-refresh entrypoint and seven-day forecast data model are implemented in the portable core, but neither is yet wired to a Q2 executable. The core uses injected callbacks rather than guessing the Q2 firmware's Wi-Fi command, network executable, or TLS support. This prevents an implementation from silently changing saved Wi-Fi settings or sending weather requests over insecure HTTP. API endpoints intended for the adapter:
+1. Download **q2-weather.zip** from a successful [GitHub Actions](https://github.com/lampsonlnguyen/q2-weather/actions) build artifact or a tagged [release](https://github.com/lampsonlnguyen/q2-weather/releases).
+2. Extract the **inner ZIP** at the root of your microSD card. It must contain:
+   - `.weather/q2app`
+   - `.weather/run`
+   - `.weather/q2-weather`
+3. Insert the card in the Q2 running a recent Q2 Pod release with Library card-app support (Q2 Pod **1.8.7 or later**).
+4. Open **Library → Weather**. The first screen starts a background refresh for both locations.
+5. Choose **Saved Location → Change saved city**, type the city, then select the search result. Return to Weather to see the new forecast.
 
-```text
-https://ipwho.is/
-https://api.open-meteo.com/v1/forecast?latitude=33.77&longitude=-117.94&current=temperature_2m,relative_humidity_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&forecast_days=7&timezone=auto
+The first launch requires the Q2 to be connected to Wi-Fi. Once data is cached, the pages remain readable without an internet connection.
+
+### Wi-Fi behavior and current limitation
+
+Weather observes Q2 Pod's Wi-Fi setting and uses the firmware's existing **Smart Wi-Fi** behavior. When Wi-Fi is enabled, Q2 Pod holds it awake while the Weather card service is running. Weather **does not turn off an already enabled radio**. The app's networking layer includes the requested Wi-Fi ownership callbacks and error cleanup.
+
+**If the user's Wi-Fi switch is manually OFF**, this standalone card app currently **cannot temporarily override it**. Q2 Pod's internal `wifi_switch` function is not available as a supported external-app API. Weather therefore leaves that preference unchanged, shows a Wi-Fi-off message, and uses its cached forecast. Implementing temporary Wi-Fi access with the switch OFF needs a small coordinated Q2 Pod firmware change; scripting direct radio/device settings would risk corrupting the user's network state.
+
+## Build and tests
+
+On Ubuntu or WSL, install `clang clang-format lld gcc make libcurl4-openssl-dev squashfs-tools unzip zip curl xz-utils binutils`.
+
+```sh
+make check
+make format-check
+sh tools/sysroot.sh
+make
 ```
 
-IP location reflects the internet exit point and may be wrong when using a VPN or carrier network. Manual location selection should always remain available.
+`tools/sysroot.sh` obtains the Q2-compatible glibc runtime from a Q2 Pod release and known-version Debian Buster mipsel development headers. The output is `dist/q2-weather.zip`, with a native **MIPS32 little-endian** executable.
 
-## Continuous integration and releases
+GitHub Actions runs clang-format automatically, host regression tests, the MIPS cross-build, ZIP validation and artifact upload on pushes to `main`. A `v*` tag publishes a **prerelease** with the device test ZIP. A built ZIP is a test candidate, not a claim of physical-device verification.
 
-On pushes to `main` and pull requests, GitHub Actions runs portable C tests and uploads `q2-weather-source.zip`. Version tags (`v*`) publish an explicitly labeled prerelease containing **development sources only**. This is not yet a deployable card app. The workflow will need to be upgraded to cross-build a native Q2 executable before an installable release is possible.
+## Architecture
 
-## Tests
+- `src/main.c`: Q2SPOT/1 Unix socket server, Library menu pages, on-device location selection, asynchronous refresh and SD-card persistence.
+- `src/http.c`: HTTPS with Q2's stock libcurl, ipwho.is geolocation, Open-Meteo geocoding and weather data.
+- `src/weather.c`: portable two-location application state, Wi-Fi ownership callbacks and versioned forecast cache serialization.
+- `src/crt-q2.c`: Q2 glibc startup shim, from [DiamondBond/q2-mixtape](https://github.com/DiamondBond/q2-mixtape), GPL-2.0-or-later.
+- `q2app`, `run`: native Library card-app integration.
+- `tools/sysroot.sh`: cross-compilation dependencies from Q2 Pod and Debian, based on the Q2 Rockbox sysroot method.
 
-Run `make check` on Linux/WSL/macOS with a C compiler. Tests cover two locations, persistence, current-location lookup, preserving initially enabled Wi-Fi, and restoring initially disabled Wi-Fi when networking, geolocation or weather retrieval fails.
+## Acknowledgments
 
-## Roadmap
+Thanks to DiamondBond for Q2 Pod and the native card-app framework, and the Mixtape, Buddy and Groovebox implementations that established a reliable Q2 development pattern.
 
-1. Verify actual Wi-Fi API and TLS client on the Shanling Q2 firmware.
-2. Implement Q2 device transport and network-backed adapters for ipwho.is and Open-Meteo.
-3. Add on-device city search and manual coordinate entry, location chooser, refresh action, and weather display using Q2 input conventions.
-4. Package under `.weather/` with an appropriate Q2 Pod SD-card app manifest and device build. GitHub Actions currently produces development sources only.
+This project incorporates the GPL-2.0-or-later Q2 startup shim by DiamondBond; the other original weather files are marked MIT.
