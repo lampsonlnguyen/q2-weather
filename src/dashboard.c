@@ -4,13 +4,20 @@
 #include <stdio.h>
 #include <string.h>
 
-/* QWERTY rows: 10, 9, 7 letters; Space / Clear / Backspace / Search. */
-static const char keyboard[] = "QWERTYUIOPASDFGHJKLZXCVBNM_!<>"; 
-#define KEY_COUNT ((int)sizeof keyboard - 1)
+/* Ten keys on row one, nine on row two, seven on row three.
+ * The bottom row has ABC/123, Space, Clear, Backspace and Search. */
+static const char letter_keys[] = "QWERTYUIOPASDFGHJKLZXCVBNM";
+static const char number_keys[] = "1234567890-./'@#&()+*?=!:,";
+#define LETTER_KEYS 26
+#define KEY_COUNT 31
 
 static void keyboard_action(Dashboard *ui) {
-    char ch = keyboard[ui->keyboard_index];
-    if (ch == '>') {
+    int index = ui->keyboard_index;
+    if (index == 26) {
+        ui->keyboard_numbers = !ui->keyboard_numbers;
+        return;
+    }
+    if (index == 30) {
         if (ui->city_length) {
             ui->search_request = 1;
             ui->match_count = 0;
@@ -19,17 +26,18 @@ static void keyboard_action(Dashboard *ui) {
             ui->page = 2;
             ui->keyboard_index = 0;
         }
-    } else if (ch == '!') {
+    } else if (index == 28) {
         ui->city_length = 0;
         ui->city_query[0] = 0;
-    } else if (ch == '<') {
+    } else if (index == 29) {
         if (ui->city_length) ui->city_query[--ui->city_length] = 0;
     } else if (ui->city_length < (int)sizeof ui->city_query - 1) {
-        ui->city_query[ui->city_length++] = ch == '_' ? ' ' : ch;
+        char ch = index == 27 ? ' ' :
+                  ui->keyboard_numbers ? number_keys[index] : letter_keys[index];
+        ui->city_query[ui->city_length++] = ch;
         ui->city_query[ui->city_length] = 0;
     }
 }
-
 
 static void open_location(Dashboard *ui) {
     ui->day = 0;
@@ -115,11 +123,11 @@ int dashboard_input(Dashboard *ui, const char *event) {
         ui->wheel_rem += movement;
         int changed = 0;
         int *selection = ui->page == 5 ? &ui->match_selected :
-                         ui->page == 0 ? &ui->slot :
+                         ui->page == 0 ? &ui->home_selected :
                          ui->page == 1 || ui->page == 4 ? &ui->day :
                          &ui->keyboard_index;
         int max = ui->page == 5 ? ui->match_count - 1 :
-                  ui->page == 0 ? 1 :
+                  ui->page == 0 ? 2 :
                   ui->page == 2 ? 3 :
                   ui->page == 3 ? KEY_COUNT - 1 :
                   Q2_FORECAST_DAYS - 1;
@@ -153,8 +161,15 @@ int dashboard_input(Dashboard *ui, const char *event) {
                 keyboard_action(ui);
             else if (ui->page == 2)
                 settings_action(ui);
-            else if (ui->page == 0)
-                open_location(ui);
+            else if (ui->page == 0) {
+                if (ui->home_selected == 2) {
+                    ui->page = 2;
+                    ui->keyboard_index = 0;
+                } else {
+                    ui->slot = ui->home_selected;
+                    open_location(ui);
+                }
+            }
             else if (ui->page == 1) {
                 ui->page = 4;
                 ui->detailed = 1;
@@ -195,7 +210,7 @@ int dashboard_input(Dashboard *ui, const char *event) {
             } else if (y >= 193 && y < 227 && x >= 78 && x < 295) {
                 idx = 19 + (x - 78) / 31;
             } else if (y >= 238 && y < 275 && x >= 34 && x < 342) {
-                idx = 26 + (x - 34) / 77;
+                idx = 26 + (x - 34) / 62;
             }
             if (idx < 0 || idx >= KEY_COUNT) return 0;
             ui->keyboard_index = idx;
@@ -205,13 +220,15 @@ int dashboard_input(Dashboard *ui, const char *event) {
             if (y < 76 || idx < 0 || idx >= 4) return 0;
             ui->keyboard_index = idx;
             settings_action(ui);
-        } else if (ui->page == 0 && y < 42 && x > 250) {
+        } else if (ui->page == 0 && y < 42 && x >= 267 && x < 344) {
+            ui->home_selected = 2;
             ui->page = 2;
             ui->keyboard_index = 0;
         } else if (ui->page == 0 && y >= 65 && y < 265) {
-            if (y >= 156 && y < 255) ui->slot = 1;
-            else if (y >= 65 && y < 155) ui->slot = 0;
+            if (y >= 156 && y < 255) ui->home_selected = 1;
+            else if (y >= 65 && y < 155) ui->home_selected = 0;
             else return 0;
+            ui->slot = ui->home_selected;
             open_location(ui);
         } else if (ui->page == 1 && y >= 209 && y <= 283) {
             int idx = (x - 31) / 45;
