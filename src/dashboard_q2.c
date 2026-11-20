@@ -32,6 +32,7 @@
 #define SERVICE_PATH "/mnt/mmc/.weather/q2-weather-service"
 #define UNITS_PATH "/mnt/mmc/.weather/units"
 #define STATUS_PATH "/mnt/mmc/.weather/network-status"
+#define STARTUP_LOG "/mnt/mmc/.weather/startup.log"
 #define REFRESH_MS 1000
 
 static volatile sig_atomic_t interrupted;
@@ -62,8 +63,21 @@ static pid_t start_service(void) {
     if (connected_service()) return 0;
     pid_t pid = fork();
     if (pid == 0) {
-        execl(SERVICE_PATH, "q2-weather", (char *)NULL);
+        execl(SERVICE_PATH, "q2-weather-service", (char *)NULL);
+        /* Startup failures occur before any HTTP request can create a log. */
+        FILE *file = fopen(STARTUP_LOG, "ab");
+        if (file) {
+            fprintf(file, "service exec failed: errno=%d\\n", errno);
+            fclose(file);
+        }
         _exit(127);
+    }
+    if (pid < 0) {
+        FILE *file = fopen(STARTUP_LOG, "ab");
+        if (file) {
+            fprintf(file, "service fork failed: errno=%d\\n", errno);
+            fclose(file);
+        }
     }
     return pid > 0 ? pid : -1;
 }
@@ -335,6 +349,14 @@ int main(void) {
         if (!initial_refresh && connected_service()) {
             (void)service_command("refresh", "", NULL, 0);
             initial_refresh = 1;
+        }
+        /* A missing service used to leave an endless empty Weather page. */
+        if (!connected_service() && now - last_service_check < 2000) {
+            const char *message = "Weather service unavailable";
+            if (strcmp(ui.network_status, message)) {
+                snprintf(ui.network_status, sizeof ui.network_status, "%s", message);
+                ui.redraw = 1;
+            }
         }
         if (now - last_poll >= REFRESH_MS) {
             (void)read_cache(&ui);
