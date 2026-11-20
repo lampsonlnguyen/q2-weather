@@ -87,11 +87,12 @@ def main():
         emit_font(output, "weather_font_small", 12, 13, 18)
         emit_font(output, "weather_font_large", 21, 23, 30)
 
-    # Launcher PNG comes directly from the checked-in partly-cloudy PNG.
-    partly = dict(images)["partly"]
-    partly.resize((52, 52), Image.Resampling.LANCZOS).save(
-        ICONS / "icon.png", "PNG", optimize=True
-    )
+    # Dedicated editable launcher artwork: bright yellow sun, not muted
+    # partly-cloudy forecast art. The source stays in the repository.
+    with Image.open(ROOT / "assets" / "icon.png") as launcher:
+        launcher.convert("RGBA").resize(
+            (52, 52), Image.Resampling.LANCZOS
+        ).save(ICONS / "icon.png", "PNG", optimize=True)
     print(f"Compiled {len(images)} replaceable PNG sprites and two sans-serif font sizes")
 
 
