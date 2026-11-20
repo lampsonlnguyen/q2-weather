@@ -27,14 +27,29 @@ int main(void) {
     assert(dashboard_input(&ui, "k d 218") == 1);
     assert(!strcmp(ui.city_query, "QW"));
 
-    /* Touch the QWERTY first-row letters, then backspace and Space. */
+    /* Distinguish single-character backspace from full-field Clear. */
     assert(dashboard_input(&ui, "t u 105 127") == 1); /* E */
     assert(!strcmp(ui.city_query, "QWE"));
-    assert(dashboard_input(&ui, "t u 169 257") == 1); /* DELETE */
+    assert(dashboard_input(&ui, "t u 220 257") == 1); /* <-- */
     assert(!strcmp(ui.city_query, "QW"));
     assert(dashboard_input(&ui, "t u 72 257") == 1); /* SPACE */
     assert(!strcmp(ui.city_query, "QW "));
-    assert(dashboard_input(&ui, "t u 262 257") == 1); /* SEARCH */
+    assert(dashboard_input(&ui, "t u 145 257") == 1); /* CLEAR */
+    assert(ui.city_length == 0 && !strcmp(ui.city_query, ""));
+    /* Search on an empty input should stay on the QWERTY screen. */
+    assert(dashboard_input(&ui, "t u 300 257") == 1); /* SEARCH */
+    assert(ui.page == 3 && !ui.search_request);
+    assert(dashboard_input(&ui, "t u 105 127") == 1); /* E */
+    assert(!strcmp(ui.city_query, "E"));
+    /* Click wheel also reaches the new Clear action (index 27). */
+    ui.keyboard_index = 26;
+    ui.wheel_rem = 0;
+    assert(dashboard_input(&ui, "w -28") == 1);
+    assert(ui.keyboard_index == 27);
+    assert(dashboard_input(&ui, "k d 218") == 1);
+    assert(ui.city_length == 0 && !ui.city_query[0]);
+    assert(dashboard_input(&ui, "t u 105 127") == 1); /* E */
+    assert(dashboard_input(&ui, "t u 300 257") == 1); /* SEARCH */
     assert(ui.search_request && ui.page == 2);
 
     /* Three matching cities: wheel moves through real geographic results. */
