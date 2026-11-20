@@ -77,7 +77,7 @@ jobs:
               --title "$RELEASE_TAG (device test)"
           fi
 
-  publish_weather_v070:
+  publish_weather_v121:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-24.04
@@ -88,17 +88,17 @@ jobs:
         with:
           name: q2-weather-card-app
           path: dist
-      - name: Publish v0.7.0 city results and icon
+      - name: Publish v1.2.1 QWERTY editing controls
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TARGET_SHA: ${{ github.sha }}
         run: |
-          if gh release view v0.7.0 >/dev/null 2>&1; then
-            echo 'v0.7.0 already exists; leaving published version unchanged'
+          if gh release view v1.2.1 >/dev/null 2>&1; then
+            echo 'v1.2.1 already exists; leaving published version unchanged'
             exit 0
           fi
-          gh release create v0.7.0 dist/q2-weather.zip \
+          gh release create v1.2.1 dist/q2-weather.zip \
             --target "$TARGET_SHA" \
-            --title "Q2 Weather v0.7.0 — Exact City Selection" \
-            --notes "Adds brighter golden-yellow sun launcher from editable assets/icon.png, up to eight Open-Meteo city/state/country matches, wheel-and-touch city selection with three rounded-screen-safe visible rows, Back to QWERTY search, and coordinate-validated saving. Saved location names include region/country. Remains one Weather Library app, preserving current light/dark iPod-style themes and seven-day forecast. Verified by host tests and Q2 MIPS CI; hardware UI validation recommended."
+            --title "Q2 Weather v1.2.1 — Clear and Backspace" \
+            --notes "QWERTY city keyboard now provides separate SPACE, CLEAR, <-- (single-character backspace), and SEARCH buttons. CLEAR removes the full input; backspace removes only the last character. Wheel and touch mapping both updated, with buttons kept inside the rounded Q2 screen safe area. Empty searches are ignored. Preserves weather dashboard, exact city selection, theme settings, and saved locations."
