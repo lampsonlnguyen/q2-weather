@@ -205,9 +205,9 @@ static void location(uint32_t *dst, unsigned stride, const Dashboard *ui, int sl
 static void location_choice(uint32_t *dst, unsigned stride, const Dashboard *ui,
                             int slot, int y) {
     const WeatherLocation *loc = &ui->weather.locations[slot];
-    uint32_t fill = slot == ui->slot ? PANEL_LIGHT : PANEL;
+    uint32_t fill = slot == ui->home_selected ? PANEL_LIGHT : PANEL;
     rect(dst, stride, 31, y, 313, 90, fill);
-    frame(dst, stride, 31, y, 313, 90, slot == ui->slot ? HIGHLIGHT : BORDER);
+    frame(dst, stride, 31, y, 313, 90, slot == ui->home_selected ? HIGHLIGHT : BORDER);
     label(dst, stride, 43, y + 6, slot ? TR(SAVED_LOCATION) : TR(CURRENT_LOCATION), 1,
           DIM, 21);
     if (loc->used) {
@@ -265,10 +265,13 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
     const char *title = TR(WEATHER);
     label(dst, stride, (DASH_WIDTH - text_width(title, 0)) / 2, 12,
           title, 1, TEXT, 24);
-    if (ui->page == 0)
-        label(dst, stride, 334 - text_width(TR(SETTINGS), 0), 12, TR(SETTINGS), 1,
-              HIGHLIGHT, 14);
-    else
+    if (ui->page == 0) {
+        int selected = ui->home_selected == 2;
+        rect(dst, stride, 265, 7, 79, 27, selected ? PANEL_LIGHT : PANEL);
+        frame(dst, stride, 265, 7, 79, 27, selected ? HIGHLIGHT : BORDER);
+        label(dst, stride, 304 - text_width(TR(SETTINGS), 0) / 2, 12,
+              TR(SETTINGS), 1, selected ? HIGHLIGHT : DIM, 14);
+    } else
         label(dst, stride, 279, 12, "Q2 POD", 1, DIM, 8);
     if (ui->page == 3) {
         label(dst, stride, 43, 49, TR(SEARCH_CITY), 1, TEXT, 23);
@@ -276,9 +279,13 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         frame(dst, stride, 33, 72, 309, 34, HIGHLIGHT);
         label(dst, stride, 45, 80, ui->city_length ? ui->city_query : "City name...",
               1, ui->city_length ? TEXT : DIM, 35);
-        static const char *const rows[] = {
+        static const char *const letters[] = {
             "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"
         };
+        static const char *const numbers[] = {
+            "1234567890", "-./'@#&()", "+*?=!:,"
+        };
+        const char *const *rows = ui->keyboard_numbers ? numbers : letters;
         const int offsets[] = {32, 47, 78};
         const int starts[] = {0, 10, 19};
         const int tops[] = {115, 154, 193};
@@ -296,15 +303,28 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
                       selected ? BG : TEXT, 1);
             }
         }
-        /* Four buttons fit inside x=34..342, clear of rounded corners. */
-        static const char *const actions[] = {"SPACE", "CLEAR", "<--", "SEARCH"};
-        for (int i = 0; i < 4; i++) {
-            int x = 34 + i * 77;
+        /* The action row has five buttons safely inside the rounded screen.
+         * Backspace is drawn as a pixel arrow, not a text substitute. */
+        for (int i = 0; i < 5; ++i) {
+            int x = 34 + i * 62;
             int selected = ui->keyboard_index == 26 + i;
-            rect(dst, stride, x, 238, 73, 37, selected ? HIGHLIGHT : PANEL);
-            frame(dst, stride, x, 238, 73, 37, selected ? HIGHLIGHT : BORDER);
-            label(dst, stride, x + (73 - text_width(actions[i], 0)) / 2,
-                  248, actions[i], 1, selected ? BG : TEXT, 10);
+            uint32_t ink = selected ? BG : TEXT;
+            rect(dst, stride, x, 238, 59, 37, selected ? HIGHLIGHT : PANEL);
+            frame(dst, stride, x, 238, 59, 37, selected ? HIGHLIGHT : BORDER);
+            if (i == 3) {
+                /* Left arrow with a distinct short backspace stem. */
+                rect(dst, stride, x + 15, 255, 30, 3, ink);
+                for (int d = 0; d < 8; ++d) {
+                    rect(dst, stride, x + 15 + d, 255 - d, 3, 3, ink);
+                    rect(dst, stride, x + 15 + d, 255 + d, 3, 3, ink);
+                }
+            } else {
+                const char *text = i == 0 ? (ui->keyboard_numbers ? "ABC" : "123")
+                                   : i == 1 ? "SPACE"
+                                   : i == 2 ? "CLEAR" : "SEARCH";
+                label(dst, stride, x + (59 - text_width(text, 0)) / 2,
+                      248, text, 1, ink, 8);
+            }
         }
         label(dst, stride, 42, 289, "WHEEL SELECT   CENTER TYPE   BACK", 1, DIM, 39);
         return;
