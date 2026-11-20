@@ -31,6 +31,7 @@
 #define STATE_PATH "/mnt/mmc/.weather/state"
 #define SERVICE_PATH "/mnt/mmc/.weather/q2-weather-service"
 #define UNITS_PATH "/mnt/mmc/.weather/units"
+#define STATUS_PATH "/mnt/mmc/.weather/network-status"
 #define REFRESH_MS 1000
 
 static volatile sig_atomic_t interrupted;
@@ -229,6 +230,20 @@ static int read_cache(Dashboard *ui) {
     return 1;
 }
 
+static void read_network_status(Dashboard *ui) {
+    char next[sizeof ui->network_status] = {0};
+    FILE *file = fopen(STATUS_PATH, "rb");
+    if (file) {
+        (void)fgets(next, sizeof next, file);
+        fclose(file);
+        next[strcspn(next, "\n")] = 0;
+    }
+    if (strcmp(ui->network_status, next)) {
+        snprintf(ui->network_status, sizeof ui->network_status, "%s", next);
+        ui->redraw = 1;
+    }
+}
+
 static int open_input(void) {
     int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (fd < 0) return -1;
@@ -255,6 +270,7 @@ int main(void) {
     weather_language_select(0);
     read_theme(&ui);
     (void)read_cache(&ui);
+    read_network_status(&ui);
     pid_t service = start_service();
     int fb = open("/dev/fb0", O_RDWR | O_CLOEXEC);
     if (fb < 0) {
@@ -322,6 +338,7 @@ int main(void) {
         }
         if (now - last_poll >= REFRESH_MS) {
             (void)read_cache(&ui);
+            read_network_status(&ui);
             last_poll = now;
         }
         int city_state = atomic_load(&city_result);
