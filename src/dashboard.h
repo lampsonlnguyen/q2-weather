@@ -28,6 +28,8 @@ typedef struct {
     int wheel_rem;
     int page; /* 0 locations, 1 forecast dashboard, 2 settings, 3 city entry, 4 day detail, 5 city results */
     int keyboard_index;
+    int keyboard_numbers; /* 0 ABC, 1 123/symbols */
+    int home_selected; /* Current, Saved, Settings */
     int search_request;
     int refresh_request;
     int clear_request;
