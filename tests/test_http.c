@@ -8,6 +8,8 @@
 
 static const char *response;
 static int fail_ipwho;
+static int temporary_failures;
+static int perform_calls;
 static char requested_url[1024];
 static size_t (*writer)(char *, size_t, size_t, void *);
 static void *write_ctx;
@@ -32,6 +34,11 @@ int curl_easy_setopt(void *curl, int option, ...) {
 }
 int curl_easy_perform(void *curl) {
     (void)curl;
+    perform_calls++;
+    if (temporary_failures > 0) {
+        temporary_failures--;
+        return 28;
+    }
     if (!response || (fail_ipwho && strstr(requested_url, "ipwho.is"))) return 6;
     return writer((char *)response, 1, strlen(response), write_ctx) ==
                    strlen(response)
@@ -66,8 +73,11 @@ int main(void) {
     long updated = 0;
     char dates[7][11] = {{0}};
     response = complete;
+    perform_calls = 0;
+    temporary_failures = 1;
     assert(weather_request(33.77, -117.94, &temp, &humidity, &weather_code, &updated,
                            dates, highs, lows, rain, codes, 7) == 0);
+    assert(perform_calls == 2); /* Retry one temporary timeout. */
     assert(temp == 22 && humidity == 63 && weather_code == 3);
     assert(rain[0] == -1 && rain[1] == 10);
     assert(!strcmp(dates[6], "2026-11-24") && highs[3] == 23);
