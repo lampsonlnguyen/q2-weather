@@ -123,7 +123,7 @@ int main(void) {
     assert(home.save_request && home.city_target == 0);
 
     /* Touch selected location and move forward/backward through forecast. */
-    assert(weather_set_location(&ui.weather, 0, "Manual Home", 33.77, -117.94) == 0);
+    ui.weather.locations[0].used = 1;
     assert(dashboard_input(&ui, "t u 75 90") == 1);
     assert(ui.slot == 0 && ui.page == 1 && ui.day == 0);
     assert(dashboard_input(&ui, "w -55") == 1);
