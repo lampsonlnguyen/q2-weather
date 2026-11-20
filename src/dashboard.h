@@ -22,6 +22,7 @@ typedef struct {
     int wheel_percent;
     int language_id;
     int ready;
+    char network_status[80];
     int detailed;
     int redraw;
     int quit;
