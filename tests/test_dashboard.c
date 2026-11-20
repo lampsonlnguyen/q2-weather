@@ -37,6 +37,25 @@ int main(void) {
     assert(dashboard_input(&ui, "t u 262 257") == 1); /* SEARCH */
     assert(ui.search_request && ui.page == 2);
 
+    /* Three matching cities: wheel moves through real geographic results. */
+    ui.match_count = 3;
+    snprintf(ui.matches[0].name, sizeof ui.matches[0].name, "Westminster");
+    snprintf(ui.matches[0].region, sizeof ui.matches[0].region, "California, USA");
+    ui.matches[0].latitude = 33.759;
+    ui.matches[1].latitude = 39.836;
+    ui.matches[2].latitude = 51.498;
+    ui.page = 5;
+    ui.search_result = 0;
+    ui.match_selected = 0;
+    ui.wheel_rem = 0;
+    assert(dashboard_input(&ui, "w -28") == 1);
+    assert(ui.match_selected == 1);
+    assert(dashboard_input(&ui, "k d 170") == 1);
+    assert(ui.page == 3 && !ui.save_request);
+    ui.page = 5;
+    assert(dashboard_input(&ui, "t u 95 228") == 1);
+    assert(ui.match_selected == 2 && ui.save_request && ui.page == 2);
+
     assert(dashboard_input(&ui, "t u 42 150") == 1);
     assert(ui.units_f == 1);
     assert(dashboard_input(&ui, "t u 42 198") == 1);
