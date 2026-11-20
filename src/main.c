@@ -467,7 +467,7 @@ static void handle(char **args, int count, Reply *r) {
                 if (fabs(lat - item->latitude) < 0.000001 &&
                     fabs(lon - item->longitude) < 0.000001) {
                     if (item->region[0] && item->country[0])
-                        snprintf(city, sizeof city, "%.35s, %.12s, %.12s",
+                        snprintf(city, sizeof city, "%.26s, %.16s, %.16s",
                                  item->name, item->region, item->country);
                     else if (item->country[0])
                         snprintf(city, sizeof city, "%.44s, %.18s",
