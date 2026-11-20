@@ -21,6 +21,7 @@
 #define SOCKET_PATH "/tmp/q2-weather.browse.sock"
 #define STATE_PATH "/mnt/mmc/.weather/state"
 #define STATE_TEMP "/mnt/mmc/.weather/state.tmp"
+#define MANUAL_HOME_PATH "/mnt/mmc/.weather/manual-home"
 #define WIRE_MAX 8192
 #define ROW_MAX 32768
 
@@ -132,6 +133,20 @@ static void save_state(void) {
     if (!ok || rename(STATE_TEMP, STATE_PATH)) unlink(STATE_TEMP);
 }
 
+/* A manually selected Home location must survive restarts and must not be
+ * overwritten by subsequent approximate IP geolocation requests. */
+static int manual_home_enabled(void) {
+    return access(MANUAL_HOME_PATH, F_OK) == 0;
+}
+
+static int enable_manual_home(void) {
+    FILE *file = fopen(MANUAL_HOME_PATH, "wb");
+    if (!file) return -1;
+    int ok = fputc('1', file) != EOF;
+    if (fclose(file)) ok = 0;
+    return ok ? 0 : -1;
+}
+
 static int wifi_preference_on(void) {
     FILE *f = fopen("/mnt/data/config.ini", "rb");
     if (!f) return 1;
@@ -225,7 +240,7 @@ static void *refresh_worker(void *unused) {
         WeatherApp snapshot = rt.app;
         int generation = rt.generation;
         pthread_mutex_unlock(&state_mutex);
-        int error = weather_on_open(&snapshot, &backend);
+        int error = weather_refresh(&snapshot, &backend, !manual_home_enabled());
         pthread_mutex_lock(&state_mutex);
         if (generation == rt.generation) {
             rt.app = snapshot;
@@ -321,7 +336,7 @@ static void page_location(Reply *r, int slot) {
     }
     if (!loc->used) {
         info(r, slot ? "No saved city" : "Current city unavailable",
-             slot ? "Choose a city below" : "Refresh to detect your city");
+             slot ? "Choose a city below" : "Set Home City in Settings");
     } else {
         if (loc->valid) {
             display_number(temp, sizeof temp, loc->temperature_c);
@@ -456,11 +471,18 @@ static void handle(char **args, int count, Reply *r) {
         page_cities(r);
     } else if (!strcmp(operation, "savecity")) {
         double lat, lon;
+        int slot = 1;
         char city[Q2_WEATHER_NAME] = {0};
         int found = 0;
         pthread_mutex_lock(&state_mutex);
+        int fields = sscanf(arg, "%d %lf %lf", &slot, &lat, &lon);
+        /* Old clients passed only the coordinates: retain compatibility. */
+        if (fields != 3) {
+            slot = 1;
+            fields = sscanf(arg, "%lf %lf", &lat, &lon) == 2 ? 3 : 0;
+        }
         if (!rt.search_pending && rt.search_count > 0 &&
-            sscanf(arg, "%lf %lf", &lat, &lon) == 2) {
+            fields == 3 && (slot == 0 || slot == 1)) {
             for (int i = 0; i < rt.search_count; ++i) {
                 WeatherGeoResult *item = &rt.search_matches[i];
                 if (fabs(lat - item->latitude) < 0.000001 &&
@@ -484,7 +506,9 @@ static void handle(char **args, int count, Reply *r) {
             snprintf(r->message, sizeof r->message, "Please search again");
         } else {
             pthread_mutex_lock(&state_mutex);
-            int good = weather_set_location(&rt.app, 1, city, lat, lon) == WEATHER_OK;
+            int good = 1;
+            if (slot == 0 && enable_manual_home()) good = 0;
+            if (good) good = weather_set_location(&rt.app, slot, city, lat, lon) == WEATHER_OK;
             if (good) {
                 rt.generation++;
                 save_state();
@@ -492,7 +516,8 @@ static void handle(char **args, int count, Reply *r) {
             pthread_mutex_unlock(&state_mutex);
             if (good) {
                 refresh();
-                snprintf(r->message, sizeof r->message, "Saved city; updating weather");
+                snprintf(r->message, sizeof r->message,
+                         slot ? "Saved city; updating weather" : "Home city; updating weather");
             } else {
                 snprintf(r->status, sizeof r->status, "error");
                 snprintf(r->message, sizeof r->message, "Invalid city");
