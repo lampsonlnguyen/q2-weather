@@ -308,6 +308,34 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         label(dst, stride, 42, 289, "WHEEL SELECT   CENTER TYPE   BACK", 1, DIM, 39);
         return;
     }
+    if (ui->page == 5) {
+        label(dst, stride, 43, 48, "SELECT LOCATION", 2, TEXT, 21);
+        char summary[55];
+        snprintf(summary, sizeof summary, "%d matches - select exact city",
+                 ui->match_count);
+        label(dst, stride, 43, 75, summary, 1, DIM, 36);
+        int start = (ui->match_selected / 3) * 3;
+        for (int row = 0; row < 3 && start + row < ui->match_count; ++row) {
+            int idx = start + row;
+            int y = 94 + row * 60;
+            int selected = idx == ui->match_selected;
+            rect(dst, stride, 34, y, 307, 54, selected ? PANEL_LIGHT : PANEL);
+            frame(dst, stride, 34, y, 307, 54, selected ? HIGHLIGHT : BORDER);
+            label(dst, stride, 46, y + 3, ui->matches[idx].name,
+                  1, selected ? HIGHLIGHT : TEXT, 32);
+            label(dst, stride, 46, y + 26, ui->matches[idx].region,
+                  1, DIM, 39);
+            label(dst, stride, 322, y + 12, ">", 1, HIGHLIGHT, 1);
+        }
+        if (ui->match_count > 3) {
+            char progress[20];
+            snprintf(progress, sizeof progress, "%d / %d", ui->match_selected + 1,
+                     ui->match_count);
+            label(dst, stride, 275, 277, progress, 1, DIM, 12);
+        }
+        label(dst, stride, 43, 290, "WHEEL  CENTER SELECT  BACK", 1, DIM, 35);
+        return;
+    }
     if (ui->page == 2) {
         label(dst, stride, 40, 47, TR(SETTINGS), 2, TEXT, 16);
         const char *titles[] = {TR(CHANGE_CITY), TR(UNITS), TR(REFRESH), TR(CLEAR_CITY)};
