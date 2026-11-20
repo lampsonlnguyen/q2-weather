@@ -309,11 +309,11 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         return;
     }
     if (ui->page == 5) {
-        label(dst, stride, 43, 48, "SELECT LOCATION", 2, TEXT, 21);
+        label(dst, stride, 43, 49, "SELECT LOCATION", 1, TEXT, 21);
         char summary[55];
         snprintf(summary, sizeof summary, "%d matches - select exact city",
                  ui->match_count);
-        label(dst, stride, 43, 75, summary, 1, DIM, 36);
+        label(dst, stride, 43, 72, summary, 1, DIM, 36);
         int start = (ui->match_selected / 3) * 3;
         for (int row = 0; row < 3 && start + row < ui->match_count; ++row) {
             int idx = start + row;
@@ -324,7 +324,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             label(dst, stride, 46, y + 3, ui->matches[idx].name,
                   1, selected ? HIGHLIGHT : TEXT, 32);
             label(dst, stride, 46, y + 26, ui->matches[idx].region,
-                  1, DIM, 39);
+                  1, DIM, 36);
             label(dst, stride, 322, y + 12, ">", 1, HIGHLIGHT, 1);
         }
         if (ui->match_count > 3) {
