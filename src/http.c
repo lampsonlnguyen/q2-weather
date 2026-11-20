@@ -201,17 +201,67 @@ static int encode(const char *input, char *output, size_t capacity) {
     return 0;
 }
 
-int weather_geocode(const char *query, char *city, size_t cap, double *lat, double *lon) {
-    char encoded[256], url[512], body[16384];
+/* Bound each result to its own JSON object: never mix names, countries or
+ * coordinates from different matches. Open-Meteo's result objects are flat. */
+int weather_geocode_parse(const char *json, WeatherGeoResult results[WEATHER_GEO_MAX]) {
+    if (!json || !results) return -1;
+    const char *p = key_at(json, "results");
+    if (!p || *p != '[') return 0;
+    ++p;
+    int count = 0;
+    while (*p && *p != ']' && count < WEATHER_GEO_MAX) {
+        while (*p == ' ' || *p == '\n' || *p == '\r' || *p == ',' || *p == '\t') ++p;
+        if (*p == ']') break;
+        if (*p != '{') return -1;
+        const char *start = p++;
+        int quoted = 0, escape_char = 0, depth = 1;
+        while (*p && depth) {
+            if (escape_char) { escape_char = 0; ++p; continue; }
+            if (*p == '\\' && quoted) { escape_char = 1; ++p; continue; }
+            if (*p == '"') quoted = !quoted;
+            else if (!quoted && *p == '{') ++depth;
+            else if (!quoted && *p == '}') --depth;
+            ++p;
+        }
+        if (depth) return -1;
+        size_t len = (size_t)(p - start);
+        if (len >= 2048) return -1;
+        char object[2048];
+        memcpy(object, start, len);
+        object[len] = 0;
+        WeatherGeoResult item = {0};
+        if (value_string(object, "name", item.name, sizeof item.name) ||
+            value_number(object, "latitude", &item.latitude) ||
+            value_number(object, "longitude", &item.longitude) ||
+            item.latitude < -90 || item.latitude > 90 ||
+            item.longitude < -180 || item.longitude > 180) return -1;
+        (void)value_string(object, "admin1", item.region, sizeof item.region);
+        (void)value_string(object, "country", item.country, sizeof item.country);
+        /* An empty country is valid in some API responses, but always
+         * distinguish a match by coordinates when saving. */
+        results[count++] = item;
+    }
+    return count;
+}
+
+int weather_geocode_many(const char *query, WeatherGeoResult results[WEATHER_GEO_MAX]) {
+    char encoded[256], url[512], body[32768];
     if (encode(query, encoded, sizeof encoded)) return -1;
     snprintf(url, sizeof url,
-             "https://geocoding-api.open-meteo.com/v1/search?name=%s&count=1&language=en&format=json",
+             "https://geocoding-api.open-meteo.com/v1/search?name=%s&count=8&language=en&format=json",
              encoded);
-    if (http_get(url, body, sizeof body) || !strstr(body, "\"results\"") ||
-        value_string(body, "name", city, cap) || value_number(body, "latitude", lat) ||
-        value_number(body, "longitude", lon))
-        return -1;
-    return *lat >= -90 && *lat <= 90 && *lon >= -180 && *lon <= 180 ? 0 : -1;
+    if (http_get(url, body, sizeof body)) return -1;
+    return weather_geocode_parse(body, results);
+}
+
+int weather_geocode(const char *query, char *city, size_t cap, double *lat, double *lon) {
+    WeatherGeoResult results[WEATHER_GEO_MAX] = {0};
+    int n = weather_geocode_many(query, results);
+    if (n <= 0 || !city || !lat || !lon || !cap) return -1;
+    if (snprintf(city, cap, "%s", results[0].name) >= (int)cap) return -1;
+    *lat = results[0].latitude;
+    *lon = results[0].longitude;
+    return 0;
 }
 
 int weather_request(double lat, double lon, int *temp, int *humidity, int *code, long *updated,
