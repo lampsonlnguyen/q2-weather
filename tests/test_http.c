@@ -80,6 +80,27 @@ int main(void) {
     response = "{\"error\":true,\"reason\":\"invalid response\"}";
     assert(weather_request(33.77, -117.94, &temp, &humidity, &weather_code, &updated,
                            dates, highs, lows, rain, codes, 7) == -1);
+    /* Multiple same-name cities must remain distinct. */
+    WeatherGeoResult cities[WEATHER_GEO_MAX] = {0};
+    const char *ambiguous =
+        "{\"results\":["
+        "{\"name\":\"Westminster\",\"latitude\":33.759,\"longitude\":-117.987,"
+        "\"admin1\":\"California\",\"country\":\"United States\"},"
+        "{\"name\":\"Westminster\",\"latitude\":39.836,\"longitude\":-105.037,"
+        "\"admin1\":\"Colorado\",\"country\":\"United States\"},"
+        "{\"name\":\"Westminster\",\"latitude\":51.498,\"longitude\":-0.133,"
+        "\"admin1\":\"England\",\"country\":\"United Kingdom\"}]}";
+    assert(weather_geocode_parse(ambiguous, cities) == 3);
+    assert(!strcmp(cities[0].region, "California"));
+    assert(!strcmp(cities[1].region, "Colorado"));
+    assert(!strcmp(cities[2].country, "United Kingdom"));
+    assert(cities[0].latitude != cities[1].latitude);
+    response = ambiguous;
+    assert(weather_geocode_many("Westminster", cities) == 3);
+    assert(strstr(requested_url, "count=8"));
+    assert(weather_geocode_parse("{\"results\":[]}", cities) == 0);
+    assert(weather_geocode_parse("{\"results\":[{\"name\":\"Fake\","
+                                 "\"latitude\":900,\"longitude\":0}]}", cities) == -1);
     puts("Open-Meteo parser tests passed");
     return 0;
 }
