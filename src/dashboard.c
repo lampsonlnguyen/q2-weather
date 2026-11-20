@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
-/* QWERTY rows: 10, 9, 7 letters; Space / Delete / Search. */
-static const char keyboard[] = "QWERTYUIOPASDFGHJKLZXCVBNM_<>"; 
+/* QWERTY rows: 10, 9, 7 letters; Space / Clear / Backspace / Search. */
+static const char keyboard[] = "QWERTYUIOPASDFGHJKLZXCVBNM_!<>"; 
 #define KEY_COUNT ((int)sizeof keyboard - 1)
 
 static void keyboard_action(Dashboard *ui) {
@@ -19,6 +19,9 @@ static void keyboard_action(Dashboard *ui) {
             ui->page = 2;
             ui->keyboard_index = 0;
         }
+    } else if (ch == '!') {
+        ui->city_length = 0;
+        ui->city_query[0] = 0;
     } else if (ch == '<') {
         if (ui->city_length) ui->city_query[--ui->city_length] = 0;
     } else if (ui->city_length < (int)sizeof ui->city_query - 1) {
@@ -191,8 +194,8 @@ int dashboard_input(Dashboard *ui, const char *event) {
                 idx = 10 + (x - 47) / 31;
             } else if (y >= 193 && y < 227 && x >= 78 && x < 295) {
                 idx = 19 + (x - 78) / 31;
-            } else if (y >= 238 && y < 275 && x >= 47 && x < 326) {
-                idx = 26 + (x - 47) / 93;
+            } else if (y >= 238 && y < 275 && x >= 34 && x < 342) {
+                idx = 26 + (x - 34) / 77;
             }
             if (idx < 0 || idx >= KEY_COUNT) return 0;
             ui->keyboard_index = idx;
