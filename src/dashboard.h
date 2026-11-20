@@ -5,6 +5,12 @@
 #include <stdint.h>
 #define DASH_WIDTH 375
 #define DASH_HEIGHT 320
+#define WEATHER_CITY_RESULTS_MAX 8
+typedef struct {
+    char name[64];
+    char region[128];
+    double latitude, longitude;
+} WeatherCityChoice;
 typedef struct {
     WeatherApp weather;
     int slot;
@@ -20,7 +26,7 @@ typedef struct {
     int redraw;
     int quit;
     int wheel_rem;
-    int page; /* 0 locations, 1 forecast dashboard, 2 settings, 3 city entry, 4 day detail */
+    int page; /* 0 locations, 1 forecast dashboard, 2 settings, 3 city entry, 4 day detail, 5 city results */
     int keyboard_index;
     int search_request;
     int refresh_request;
@@ -29,6 +35,10 @@ typedef struct {
     char city_query[48];
     int city_length;
     int native_keyboard;
+    WeatherCityChoice matches[WEATHER_CITY_RESULTS_MAX];
+    int match_count;
+    int match_selected;
+    int save_request;
 } Dashboard;
 void dashboard_init(Dashboard *ui);
 int dashboard_input(Dashboard *ui, const char *event);
