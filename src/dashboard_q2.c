@@ -67,7 +67,7 @@ static pid_t start_service(void) {
         /* Startup failures occur before any HTTP request can create a log. */
         FILE *file = fopen(STARTUP_LOG, "ab");
         if (file) {
-            fprintf(file, "service exec failed: errno=%d\\n", errno);
+            fprintf(file, "service exec failed: errno=%d\n", errno);
             fclose(file);
         }
         _exit(127);
@@ -75,7 +75,7 @@ static pid_t start_service(void) {
     if (pid < 0) {
         FILE *file = fopen(STARTUP_LOG, "ab");
         if (file) {
-            fprintf(file, "service fork failed: errno=%d\\n", errno);
+            fprintf(file, "service fork failed: errno=%d\n", errno);
             fclose(file);
         }
     }
@@ -350,17 +350,17 @@ int main(void) {
             (void)service_command("refresh", "", NULL, 0);
             initial_refresh = 1;
         }
-        /* A missing service used to leave an endless empty Weather page. */
-        if (!connected_service() && now - last_service_check < 2000) {
-            const char *message = "Weather service unavailable";
-            if (strcmp(ui.network_status, message)) {
-                snprintf(ui.network_status, sizeof ui.network_status, "%s", message);
-                ui.redraw = 1;
-            }
-        }
         if (now - last_poll >= REFRESH_MS) {
             (void)read_cache(&ui);
             read_network_status(&ui);
+            /* Show startup failures even when there is no weather.log yet. */
+            if (!connected_service()) {
+                const char *message = "Weather service unavailable";
+                if (strcmp(ui.network_status, message)) {
+                    snprintf(ui.network_status, sizeof ui.network_status, "%s", message);
+                    ui.redraw = 1;
+                }
+            }
             last_poll = now;
         }
         int city_state = atomic_load(&city_result);
