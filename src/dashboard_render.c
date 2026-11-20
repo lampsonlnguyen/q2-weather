@@ -314,10 +314,10 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             frame(dst, stride, x, 238, 59, 37, selected ? HIGHLIGHT : BORDER);
             if (i == 3) {
                 /* Smaller, centered backspace arrow; button hitbox is unchanged. */
-                rect(dst, stride, x + 21, 255, 19, 2, ink);
-                for (int d = 0; d < 6; ++d) {
-                    rect(dst, stride, x + 21 + d, 255 - d, 2, 2, ink);
-                    rect(dst, stride, x + 21 + d, 255 + d, 2, 2, ink);
+                rect(dst, stride, x + 23, 255, 15, 2, ink);
+                for (int d = 0; d < 5; ++d) {
+                    rect(dst, stride, x + 23 + d, 255 - d, 2, 2, ink);
+                    rect(dst, stride, x + 23 + d, 255 + d, 2, 2, ink);
                 }
             } else {
                 const char *text = i == 0 ? (ui->keyboard_numbers ? "ABC" : "123")
