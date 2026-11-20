@@ -274,7 +274,8 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
     } else
         label(dst, stride, 279, 12, "Q2 POD", 1, DIM, 8);
     if (ui->page == 3) {
-        label(dst, stride, 43, 49, TR(SEARCH_CITY), 1, TEXT, 23);
+        label(dst, stride, 43, 49, ui->city_target ? TR(SEARCH_CITY) : "SET HOME CITY",
+              1, TEXT, 23);
         rect(dst, stride, 33, 72, 309, 34, PANEL);
         frame(dst, stride, 33, 72, 309, 34, HIGHLIGHT);
         label(dst, stride, 45, 80, ui->city_length ? ui->city_query : "City name...",
@@ -312,11 +313,11 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             rect(dst, stride, x, 238, 59, 37, selected ? HIGHLIGHT : PANEL);
             frame(dst, stride, x, 238, 59, 37, selected ? HIGHLIGHT : BORDER);
             if (i == 3) {
-                /* Left arrow with a distinct short backspace stem. */
-                rect(dst, stride, x + 15, 255, 30, 3, ink);
-                for (int d = 0; d < 8; ++d) {
-                    rect(dst, stride, x + 15 + d, 255 - d, 3, 3, ink);
-                    rect(dst, stride, x + 15 + d, 255 + d, 3, 3, ink);
+                /* Smaller, centered backspace arrow; button hitbox is unchanged. */
+                rect(dst, stride, x + 21, 255, 19, 2, ink);
+                for (int d = 0; d < 6; ++d) {
+                    rect(dst, stride, x + 21 + d, 255 - d, 2, 2, ink);
+                    rect(dst, stride, x + 21 + d, 255 + d, 2, 2, ink);
                 }
             } else {
                 const char *text = i == 0 ? (ui->keyboard_numbers ? "ABC" : "123")
@@ -359,8 +360,9 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
     }
     if (ui->page == 2) {
         label(dst, stride, 40, 47, TR(SETTINGS), 2, TEXT, 16);
-        const char *titles[] = {TR(CHANGE_CITY), TR(UNITS), TR(REFRESH), TR(CLEAR_CITY)};
-        for (int i = 0; i < 4; i++) {
+        const char *titles[] = {TR(CHANGE_CITY), TR(UNITS), TR(REFRESH),
+                                TR(CLEAR_CITY), "Set Home City"};
+        for (int i = 0; i < 5; i++) {
             int y = 76 + i * 48;
             rect(dst, stride, 31, y, 313, 43, ui->keyboard_index == i ? PANEL_LIGHT : PANEL);
             frame(dst, stride, 31, y, 313, 43,
@@ -370,14 +372,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
                 label(dst, stride, 292, y + 12, ui->units_f ? "FAHR" : "CELS", 1,
                       HIGHLIGHT, 5);
         }
-        if (ui->search_result == 1)
-            label(dst, stride, 40, 277, TR(SEARCHING), 1, GOLD, 34);
-        else if (ui->search_result == 2)
-            label(dst, stride, 40, 277, TR(UPDATED), 1, HIGHLIGHT, 34);
-        else if (ui->search_result == -1)
-            label(dst, stride, 40, 277, TR(NOT_FOUND), 1, GOLD, 34);
-        if (!ui->search_result)
-            label(dst, stride, 43, 280, TR(ICON_CREDIT), 1, DIM, 28);
+        /* The fifth setting occupies the previous footer area. */
         return;
     }
     if (ui->page == 0) {
