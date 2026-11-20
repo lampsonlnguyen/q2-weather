@@ -6,7 +6,7 @@ A lightweight, full-screen weather application for the Shanling Q2 running [Q2 P
 
 - One Weather Library app that opens to a **location list**. Select Current Location or Saved Location to expand into that location's graphical seven-day forecast dashboard.
 - Current location detected approximately from the Q2 public IP using [ipwho.is](https://ipwho.is/).
-- One saved city using Weather's **built-in QWERTY keyboard**, operated by the click-wheel or touchscreen and [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api).
+- One saved city using Weather's **built-in QWERTY keyboard**, operated by the click-wheel or touchscreen and [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api). Searches return up to eight **city, state/province, country** matches so you select the exact destination.
 - Weather conditions, Celsius/Fahrenheit, humidity, daily high/low and precipitation chance.
 - Offline cache; background refresh on opening the dashboard and explicit refresh in Settings.
 - No API key, SDL, animation loop, runtime JPEG/PNG decoding, or sound engine.
@@ -20,8 +20,9 @@ A lightweight, full-screen weather application for the Shanling Q2 running [Q2 P
 | Day detail | Select day | Return to forecast dashboard | Forecast dashboard |
 | Settings | Select setting | Activate setting | Dashboard |
 | City entry | Select QWERTY key | Type / Space / Delete / Search | Cancel / Settings |
+| City results | Scroll matching locations | Save highlighted city and coordinates | Return to QWERTY keyboard |
 
-**Touch:** Tap **SETTINGS** on the initial Locations screen, tap Current Location or Saved Location to open its forecast dashboard, then tap a forecast day for details. An unconfigured saved location opens city entry automatically. The built-in QWERTY keyboard supports Space, Delete and Search, all selectable with the click-wheel or touchscreen. City lookup runs off the graphics thread; a firmware keyboard patch is not required.
+**Touch:** Tap **SETTINGS** on the initial Locations screen, tap Current Location or Saved Location to open its forecast dashboard, then tap a forecast day for details. An unconfigured saved location opens city entry automatically. The built-in QWERTY keyboard supports Space, Delete and Search, all selectable with the click-wheel or touchscreen. City lookup runs off the graphics thread; a firmware keyboard patch is not required. After searching, a result picker displays three matches at a time with safe spacing for the Q2's rounded screen. Scroll to a matching state/province and country, then press Center or tap to save it. The selection is checked against the returned coordinates before writing the location cache. A saved location includes the region and country to distinguish similarly named cities.
 
 **Settings:** Change saved city; toggle Celsius/Fahrenheit; refresh both locations; clear saved city. Weather follows Q2 Pod's Minimal, Classic and Modern themes, their separate accent choices, and Light Mode (including automatic day/night). The screen has centered title and rounded-corner-safe margins.
 
@@ -35,7 +36,7 @@ Download the latest `q2-weather.zip` from [GitHub Releases](https://github.com/l
 ├── q2-weather             # graphical executable
 ├── q2-weather-service     # internal weather/HTTPS helper, not a second app
 ├── lang/0.lang             # editable English UI labels; future numeric language packs
-├── icon.png
+├── icon.png                # yellow-sun launcher (from assets/icon.png)
 ├── state                  # created on Q2; retain when upgrading
 └── units                  # created on Q2
 ```
@@ -103,6 +104,8 @@ into the MIPS sysroot.
 If `build/sysroot` already exists, skip the sysroot command. The Q2 root filesystem is generated from the locally supplied stock firmware or downloaded by the sysroot script. The resulting ZIP is `dist/q2-weather.zip`. **Do not commit stock firmware or the sysroot.**
 
 ## Architecture and power
+
+The launcher artwork is the editable [assets/icon.png](assets/icon.png): a vivid yellow-gold sun and white cloud on blue, distinct from individual forecast sprites. The build resizes it to the Q2's 52-pixel app icon automatically.
 
 `src/dashboard_q2.c` handles framebuffer painting only on input/data changes, Q2 input datagrams, and a slow 1-second cache check. `src/dashboard_render.c` draws theme-adaptive, high-contrast screens and user-replaceable PNG sprites compiled by `tools/pack_sprites.py`. It uses a proportionally spaced, anti-aliased sans-serif typeface baked into the app at build time. `src/dashboard.c` handles wheel, touch, keyboard and page navigation. `src/main.c`, `src/http.c` and `src/weather.c` provide the internal HTTPS/weather helper and cache.
 
