@@ -36,6 +36,8 @@ typedef struct {
     int search_count;
     int search_pending, search_found, search_generation;
     int generation, rerun;
+    time_t last_attempt;
+    int ever_refreshed;
 } Runtime;
 
 typedef struct {
@@ -245,6 +247,8 @@ static void *refresh_worker(void *unused) {
         if (generation == rt.generation) {
             rt.app = snapshot;
             rt.error = error;
+            rt.last_attempt = time(NULL);
+            if (error == WEATHER_OK) rt.ever_refreshed = 1;
             save_state();
         } else {
             rt.rerun = 1;
@@ -266,6 +270,7 @@ static void refresh(void) {
         return;
     }
     rt.pending = 1;
+    rt.last_attempt = time(NULL);
     pthread_mutex_unlock(&state_mutex);
     pthread_t thread;
     if (pthread_create(&thread, NULL, refresh_worker, NULL)) {
@@ -615,6 +620,17 @@ int main(void) {
     refresh();
     time_t last = time(NULL);
     while (!stopped && time(NULL) - last < 600) {
+        /* Recover automatically after the Q2 reconnects. Poll infrequently
+         * and never overlap active requests or bypass manual Wi-Fi Off. */
+        time_t now = time(NULL);
+        pthread_mutex_lock(&state_mutex);
+        int pending = rt.pending;
+        int failed = rt.error != WEATHER_OK || !rt.ever_refreshed;
+        time_t elapsed = now - rt.last_attempt;
+        pthread_mutex_unlock(&state_mutex);
+        if (!pending && wifi_preference_on() &&
+            elapsed >= (failed ? 60 : 900))
+            refresh();
         struct pollfd p = {fd, POLLIN, 0};
         if (poll(&p, 1, 1000) > 0) {
             int accepted = accept(fd, NULL, NULL);
