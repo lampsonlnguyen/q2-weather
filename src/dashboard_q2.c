@@ -106,34 +106,67 @@ static int service_command(const char *op, const char *arg, char *response, size
     return 0;
 }
 
-static _Atomic int city_result;
+static _Atomic int city_result; /* 0 pending, 2 results, -1 no results */
+static _Atomic int city_generation;
+static pthread_mutex_t city_mutex = PTHREAD_MUTEX_INITIALIZER;
+static WeatherCityChoice city_choices[WEATHER_CITY_RESULTS_MAX];
+static int city_count;
 static char city_job[48];
+
+static int parse_choices(char *reply, WeatherCityChoice out[WEATHER_CITY_RESULTS_MAX]) {
+    int count = 0;
+    char *save = NULL;
+    for (char *line = strtok_r(reply, "\n", &save); line;
+         line = strtok_r(NULL, "\n", &save)) {
+        const char *prefix = "action\tsavecity\t";
+        if (strncmp(line, prefix, strlen(prefix))) continue;
+        char *name = line + strlen(prefix);
+        char *tab = strchr(name, '\t');
+        if (!tab) continue;
+        *tab++ = 0;
+        char *region = tab;
+        tab = strchr(region, '\t');
+        if (!tab) continue;
+        *tab++ = 0;
+        double lat = 0, lon = 0;
+        if (sscanf(tab, "%lf %lf", &lat, &lon) != 2 ||
+            lat < -90 || lat > 90 || lon < -180 || lon > 180 ||
+            !name[0] || count == WEATHER_CITY_RESULTS_MAX) continue;
+        WeatherCityChoice *choice = &out[count];
+        snprintf(choice->name, sizeof choice->name, "%s", name);
+        snprintf(choice->region, sizeof choice->region, "%s", region);
+        choice->latitude = lat;
+        choice->longitude = lon;
+        ++count;
+    }
+    return count;
+}
 
 static void *city_lookup(void *unused) {
     (void)unused;
-    char response[2048];
-    int result = -1;
-    if (service_command("citysearch", city_job, response, sizeof response) == 0) {
-        for (int attempt = 0; attempt < 16 && !interrupted; attempt++) {
+    char query[sizeof city_job];
+    snprintf(query, sizeof query, "%s", city_job);
+    int generation = atomic_load(&city_generation);
+    char response[4096];
+    WeatherCityChoice found[WEATHER_CITY_RESULTS_MAX] = {0};
+    int count = -1;
+    if (!service_command("citysearch", query, response, sizeof response)) {
+        for (int attempt = 0; attempt < 18 && !interrupted; attempt++) {
             sleep(1);
             if (service_command("cities", "", response, sizeof response)) continue;
-            const char *action = strstr(response, "\naction\tsavecity\t");
-            if (!action) continue;
-            const char *subtitle = strchr(action + 17, '\t');
-            const char *coords = subtitle ? strchr(subtitle + 1, '\t') : NULL;
-            double lat, lon;
-            if (coords && sscanf(coords + 1, "%lf %lf", &lat, &lon) == 2) {
-                char value[90];
-                snprintf(value, sizeof value, "%.6f %.6f", lat, lon);
-                if (!service_command("savecity", value, response, sizeof response) &&
-                    strstr(response, "\tok\t")) {
-                    result = 2;
-                }
-            }
+            /* The weather service marks its in-progress searches as refresh. */
+            if (strstr(response, "\trefresh\t")) continue;
+            count = parse_choices(response, found);
             break;
         }
     }
-    atomic_store(&city_result, result);
+    if (generation == atomic_load(&city_generation)) {
+        pthread_mutex_lock(&city_mutex);
+        city_count = count > 0 ? count : 0;
+        if (count > 0) memcpy(city_choices, found, (size_t)count * sizeof found[0]);
+        pthread_mutex_unlock(&city_mutex);
+        atomic_store(&city_result, count > 0 ? 2 : -1);
+    }
     return NULL;
 }
 
@@ -292,19 +325,50 @@ int main(void) {
             last_poll = now;
         }
         int city_state = atomic_load(&city_result);
-        if (ui.search_result == 1 && city_state && city_state != 1) {
-            ui.search_result = city_state;
+        if (ui.search_result == 1 && city_state) {
+            if (city_state == 2) {
+                pthread_mutex_lock(&city_mutex);
+                ui.match_count = city_count;
+                memcpy(ui.matches, city_choices, (size_t)city_count * sizeof city_choices[0]);
+                pthread_mutex_unlock(&city_mutex);
+                ui.match_selected = 0;
+                ui.page = 5;
+                ui.wheel_rem = 0;
+                ui.search_result = 0;
+            } else {
+                ui.search_result = -1;
+            }
+            atomic_store(&city_result, 0);
             ui.redraw = 1;
         }
         if (ui.search_request) {
             ui.search_request = 0;
             snprintf(city_job, sizeof city_job, "%s", ui.city_query);
-            atomic_store(&city_result, 1);
+            atomic_fetch_add(&city_generation, 1);
+            atomic_store(&city_result, 0);
+            ui.search_result = 1;
             pthread_t worker;
             if (!pthread_create(&worker, NULL, city_lookup, NULL))
                 pthread_detach(worker);
             else
                 ui.search_result = -1;
+        }
+        if (ui.save_request) {
+            ui.save_request = 0;
+            if (ui.match_selected >= 0 && ui.match_selected < ui.match_count) {
+                char coordinates[90], response[512];
+                WeatherCityChoice *selected = &ui.matches[ui.match_selected];
+                snprintf(coordinates, sizeof coordinates, "%.6f %.6f",
+                         selected->latitude, selected->longitude);
+                if (!service_command("savecity", coordinates, response, sizeof response) &&
+                    strstr(response, "\tok\t")) {
+                    ui.search_result = 2;
+                    ui.slot = 1;
+                } else {
+                    ui.search_result = -1;
+                }
+                ui.redraw = 1;
+            }
         }
         if (ui.refresh_request) {
             ui.refresh_request = 0;
