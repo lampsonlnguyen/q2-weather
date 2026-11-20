@@ -629,7 +629,9 @@ int main(void) {
     signal(SIGTERM, stop_server);
     signal(SIGPIPE, SIG_IGN);
     weather_init(&rt.app);
-    load_state();
+    weather_log("SERVICE", "Weather worker starting");
+    if (load_state())
+        weather_log("SERVICE", "No valid cached weather state");
     weather_art_init();
     struct sockaddr_un addr = {0};
     addr.sun_family = AF_UNIX;
@@ -638,9 +640,11 @@ int main(void) {
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0 || bind(fd, (struct sockaddr *)&addr, sizeof addr) ||
         listen(fd, 4)) {
+        weather_log("SERVICE", "Unable to open weather command socket");
         if (fd >= 0) close(fd);
         return 1;
     }
+    weather_log("SERVICE", "Weather worker ready");
     /* Let Q2 Pod finish launching before network access; Smart Wi-Fi sees
      * this app as running and wakes the radio on its next poll. */
     refresh();
