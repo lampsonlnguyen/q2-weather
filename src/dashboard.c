@@ -172,8 +172,8 @@ int dashboard_input(Dashboard *ui, const char *event) {
         if (y < 42 && x < 85) {
             back(ui);
         } else if (ui->page == 5) {
-            int row = (y - 84) / 60;
-            if (y < 84 || y >= 264 || x < 34 || x >= 341 || row < 0 || row >= 3)
+            int row = (y - 94) / 60;
+            if (y < 94 || y >= 274 || x < 34 || x >= 341 || row < 0 || row >= 3)
                 return 0;
             int start = (ui->match_selected / 3) * 3;
             int idx = start + row;
