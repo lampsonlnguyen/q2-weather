@@ -13,6 +13,8 @@ static void keyboard_action(Dashboard *ui) {
     if (ch == '>') {
         if (ui->city_length) {
             ui->search_request = 1;
+            ui->match_count = 0;
+            ui->match_selected = 0;
             ui->search_result = 1;
             ui->page = 2;
             ui->keyboard_index = 0;
@@ -41,6 +43,9 @@ static void open_location(Dashboard *ui) {
 static void back(Dashboard *ui) {
     if (ui->page == 3) {
         ui->page = 2;
+        ui->keyboard_index = 0;
+    } else if (ui->page == 5) {
+        ui->page = 3;
         ui->keyboard_index = 0;
     } else if (ui->page == 4) {
         ui->page = 1;
@@ -106,10 +111,12 @@ int dashboard_input(Dashboard *ui, const char *event) {
             (movement < 0 && ui->wheel_rem > 0)) ui->wheel_rem = 0;
         ui->wheel_rem += movement;
         int changed = 0;
-        int *selection = ui->page == 0 ? &ui->slot :
+        int *selection = ui->page == 5 ? &ui->match_selected :
+                         ui->page == 0 ? &ui->slot :
                          ui->page == 1 || ui->page == 4 ? &ui->day :
                          &ui->keyboard_index;
-        int max = ui->page == 0 ? 1 :
+        int max = ui->page == 5 ? ui->match_count - 1 :
+                  ui->page == 0 ? 1 :
                   ui->page == 2 ? 3 :
                   ui->page == 3 ? KEY_COUNT - 1 :
                   Q2_FORECAST_DAYS - 1;
@@ -132,7 +139,14 @@ int dashboard_input(Dashboard *ui, const char *event) {
         if (code == 170) {
             back(ui);
         } else if (code == 218) {
-            if (ui->page == 3)
+            if (ui->page == 5) {
+                if (ui->match_count > 0) {
+                    ui->save_request = 1;
+                    ui->search_result = 1;
+                    ui->page = 2;
+                    ui->keyboard_index = 0;
+                }
+            } else if (ui->page == 3)
                 keyboard_action(ui);
             else if (ui->page == 2)
                 settings_action(ui);
@@ -157,6 +171,18 @@ int dashboard_input(Dashboard *ui, const char *event) {
         if (x < 0 || x >= DASH_WIDTH || y < 0 || y >= DASH_HEIGHT) return 0;
         if (y < 42 && x < 85) {
             back(ui);
+        } else if (ui->page == 5) {
+            int row = (y - 84) / 60;
+            if (y < 84 || y >= 264 || x < 34 || x >= 341 || row < 0 || row >= 3)
+                return 0;
+            int start = (ui->match_selected / 3) * 3;
+            int idx = start + row;
+            if (idx >= ui->match_count) return 0;
+            ui->match_selected = idx;
+            ui->save_request = 1;
+            ui->search_result = 1;
+            ui->page = 2;
+            ui->keyboard_index = 0;
         } else if (ui->page == 3) {
             int idx = -1;
             if (y >= 115 && y < 149 && x >= 32 && x < 342) {
