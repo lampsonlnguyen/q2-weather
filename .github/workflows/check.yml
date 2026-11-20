@@ -77,7 +77,7 @@ jobs:
               --title "$RELEASE_TAG (device test)"
           fi
 
-  publish_weather_v121:
+  publish_weather_v122:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-24.04
@@ -88,17 +88,17 @@ jobs:
         with:
           name: q2-weather-card-app
           path: dist
-      - name: Publish v1.2.1 QWERTY editing controls
+      - name: Publish v1.2.2 Settings and numeric keyboard
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TARGET_SHA: ${{ github.sha }}
         run: |
-          if gh release view v1.2.1 >/dev/null 2>&1; then
-            echo 'v1.2.1 already exists; leaving published version unchanged'
+          if gh release view v1.2.2 >/dev/null 2>&1; then
+            echo 'v1.2.2 already exists; leaving published version unchanged'
             exit 0
           fi
-          gh release create v1.2.1 dist/q2-weather.zip \
+          gh release create v1.2.2 dist/q2-weather.zip \
             --target "$TARGET_SHA" \
-            --title "Q2 Weather v1.2.1 — Clear and Backspace" \
-            --notes "QWERTY city keyboard now provides separate SPACE, CLEAR, <-- (single-character backspace), and SEARCH buttons. CLEAR removes the full input; backspace removes only the last character. Wheel and touch mapping both updated, with buttons kept inside the rounded Q2 screen safe area. Empty searches are ignored. Preserves weather dashboard, exact city selection, theme settings, and saved locations."
+            --title "Q2 Weather v1.2.2 — Wheel Settings & 123 Keyboard" \
+            --notes "Settings is now a third click-wheel selectable entry on Weather's home screen, with clear visual highlight and a rounded-corner-safe header tab. City keyboard has ABC/123 switch with digits and common punctuation (- . / apostrophe @ # & ( ) + * ? = ! : comma). Backspace is a drawn left-arrow symbol instead of text. Preserves Space, Clear and Search controls, light/dark Q2 themes and saved locations. Changes are limited to q2-weather."
