@@ -22,6 +22,7 @@
 #define STATE_PATH "/mnt/mmc/.weather/state"
 #define STATE_TEMP "/mnt/mmc/.weather/state.tmp"
 #define MANUAL_HOME_PATH "/mnt/mmc/.weather/manual-home"
+#define STATUS_PATH "/mnt/mmc/.weather/network-status"
 #define WIRE_MAX 8192
 #define ROW_MAX 32768
 
@@ -235,6 +236,30 @@ static const WeatherBackend backend = {
 };
 
 /* Network calls run outside the Library browser's 15-second request timeout. */
+static void save_network_status(int error) {
+    const char *message = "";
+    if (error != WEATHER_OK) {
+        const char *http_error = weather_http_error();
+        if (strstr(http_error, "DNS unavailable"))
+            message = "DNS unavailable - retrying";
+        else if (strstr(http_error, "Connection timed out"))
+            message = "Connection timed out - retrying";
+        else if (strstr(http_error, "TLS certificate error"))
+            message = "Secure connection failed";
+        else if (error == WEATHER_GEO)
+            message = "Location unavailable - set Home City";
+        else if (error == WEATHER_RADIO)
+            message = "Wi-Fi disabled";
+        else
+            message = "Weather update failed - retrying";
+    }
+    FILE *file = fopen(STATUS_PATH, "wb");
+    if (!file) return;
+    (void)fprintf(file, "%s\\n", message);
+    (void)fclose(file);
+}
+
+/* Network refresh happens on a worker, never the rendering thread. */
 static void *refresh_worker(void *unused) {
     (void)unused;
     for (;;) {
@@ -247,6 +272,7 @@ static void *refresh_worker(void *unused) {
         if (generation == rt.generation) {
             rt.app = snapshot;
             rt.error = error;
+            save_network_status(error);
             rt.last_attempt = time(NULL);
             if (error == WEATHER_OK) rt.ever_refreshed = 1;
             save_state();
