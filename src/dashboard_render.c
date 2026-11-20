@@ -267,9 +267,9 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
           title, 1, TEXT, 24);
     if (ui->page == 0) {
         int selected = ui->home_selected == 2;
-        rect(dst, stride, 265, 7, 79, 27, selected ? PANEL_LIGHT : PANEL);
-        frame(dst, stride, 265, 7, 79, 27, selected ? HIGHLIGHT : BORDER);
-        label(dst, stride, 304 - text_width(TR(SETTINGS), 0) / 2, 12,
+        rect(dst, stride, 266, 9, 68, 25, selected ? PANEL_LIGHT : PANEL);
+        frame(dst, stride, 266, 9, 68, 25, selected ? HIGHLIGHT : BORDER);
+        label(dst, stride, 300 - text_width(TR(SETTINGS), 0) / 2, 12,
               TR(SETTINGS), 1, selected ? HIGHLIGHT : DIM, 14);
     } else
         label(dst, stride, 279, 12, "Q2 POD", 1, DIM, 8);
