@@ -379,7 +379,9 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         label(dst, stride, 37, 49, TR(LOCATIONS), 1, DIM, 15);
         location_choice(dst, stride, ui, 0, 65);
         location_choice(dst, stride, ui, 1, 165);
-        label(dst, stride, 40, 276, TR(SELECT_LOCATION), 1, DIM, 47);
+        label(dst, stride, 40, 276,
+              ui->network_status[0] ? ui->network_status : TR(SELECT_LOCATION),
+              1, ui->network_status[0] ? GOLD : DIM, 47);
         label(dst, stride, 42, 289, "CENTER OPEN   BACK EXIT", 1, DIM, 33);
         return;
     }
@@ -399,7 +401,9 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             label(dst, stride, 258, 113, TR(NO_DATA), 1, DIM, 9);
         }
         forecast(dst, stride, ui);
-        label(dst, stride, 42, 289, "CENTER DETAILS   BACK LOCATIONS", 1, DIM, 39);
+        label(dst, stride, 42, 289,
+              ui->network_status[0] ? ui->network_status : "CENTER DETAILS   BACK LOCATIONS",
+              1, ui->network_status[0] ? GOLD : DIM, 39);
     } else {
         const WeatherLocation *loc = &ui->weather.locations[ui->slot];
         label(dst, stride, 40, 47, loc->used ? loc->name : "No location", 2, TEXT, 20);
