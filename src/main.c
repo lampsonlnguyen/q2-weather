@@ -255,7 +255,7 @@ static void save_network_status(int error) {
     }
     FILE *file = fopen(STATUS_PATH, "wb");
     if (!file) return;
-    (void)fprintf(file, "%s\\n", message);
+    (void)fprintf(file, "%s\n", message);
     (void)fclose(file);
 }
 
