@@ -105,6 +105,15 @@ into the MIPS sysroot.
 
 If `build/sysroot` already exists, skip the sysroot command. The Q2 root filesystem is generated from the locally supplied stock firmware or downloaded by the sysroot script. The resulting ZIP is `dist/q2-weather.zip`. **Do not commit stock firmware or the sysroot.**
 
+
+### Network resilience
+
+- Saved Location requests Open-Meteo directly using its saved coordinates. It does not need either IP geolocation provider, and it is fetched first.
+- Current Location tries ipwho.is and ipapi.co when automatic detection is enabled. If both fail, use Settings → Set Home City.
+- DNS, connection and timeout errors receive one bounded retry. After failed refreshes, the app retries about every 60 seconds while open; after successful refreshes, about every 15 minutes. Manual Wi-Fi Off remains respected.
+- Cached forecasts remain visible while offline. Location screens display compact network status and detailed attempts are logged to .weather/weather.log.
+- Manual city search requires the Open-Meteo geocoding service to be reachable. Once selected, its forecast requires no IP geolocation.
+
 ## Architecture and power
 
 The launcher artwork is the editable [assets/icon.png](assets/icon.png): a vivid yellow-gold sun and white cloud on blue, distinct from individual forecast sprites. The build resizes it to the Q2's 52-pixel app icon automatically.
