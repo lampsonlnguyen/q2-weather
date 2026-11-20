@@ -7,6 +7,7 @@
 #include <string.h>
 
 static const char *response;
+static int fail_ipwho;
 static char requested_url[1024];
 static size_t (*writer)(char *, size_t, size_t, void *);
 static void *write_ctx;
@@ -31,7 +32,7 @@ int curl_easy_setopt(void *curl, int option, ...) {
 }
 int curl_easy_perform(void *curl) {
     (void)curl;
-    if (!response) return 6;
+    if (!response || (fail_ipwho && strstr(requested_url, "ipwho.is"))) return 6;
     return writer((char *)response, 1, strlen(response), write_ctx) ==
                    strlen(response)
                ? 0
@@ -80,6 +81,17 @@ int main(void) {
     response = "{\"error\":true,\"reason\":\"invalid response\"}";
     assert(weather_request(33.77, -117.94, &temp, &humidity, &weather_code, &updated,
                            dates, highs, lows, rain, codes, 7) == -1);
+    /* The primary IP provider may be offline or rate limited. */
+    response = "{\"city\":\"Westminster\",\"latitude\":33.759,\"longitude\":-117.987}";
+    fail_ipwho = 1;
+    char city[64] = {0};
+    double lat = 0, lon = 0;
+    assert(weather_geolocate(city, sizeof city, &lat, &lon) == 0);
+    assert(!strcmp(city, "Westminster"));
+    assert(lat > 33 && lon < -117);
+    assert(strstr(requested_url, "ipapi.co/json/"));
+    fail_ipwho = 0;
+
     /* Multiple same-name cities must remain distinct. */
     WeatherGeoResult cities[WEATHER_GEO_MAX] = {0};
     const char *ambiguous =
