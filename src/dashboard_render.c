@@ -296,13 +296,14 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
                       selected ? BG : TEXT, 1);
             }
         }
-        static const char *const actions[] = {"SPACE", "DELETE", "SEARCH"};
-        for (int i = 0; i < 3; i++) {
-            int x = 47 + i * 93;
+        /* Four buttons fit inside x=34..342, clear of rounded corners. */
+        static const char *const actions[] = {"SPACE", "CLEAR", "<--", "SEARCH"};
+        for (int i = 0; i < 4; i++) {
+            int x = 34 + i * 77;
             int selected = ui->keyboard_index == 26 + i;
-            rect(dst, stride, x, 238, 89, 37, selected ? HIGHLIGHT : PANEL);
-            frame(dst, stride, x, 238, 89, 37, selected ? HIGHLIGHT : BORDER);
-            label(dst, stride, x + (89 - text_width(actions[i], 0)) / 2,
+            rect(dst, stride, x, 238, 73, 37, selected ? HIGHLIGHT : PANEL);
+            frame(dst, stride, x, 238, 73, 37, selected ? HIGHLIGHT : BORDER);
+            label(dst, stride, x + (73 - text_width(actions[i], 0)) / 2,
                   248, actions[i], 1, selected ? BG : TEXT, 10);
         }
         label(dst, stride, 42, 289, "WHEEL SELECT   CENTER TYPE   BACK", 1, DIM, 39);
