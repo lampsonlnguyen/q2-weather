@@ -358,12 +358,12 @@ int main(void) {
             if (ui.match_selected >= 0 && ui.match_selected < ui.match_count) {
                 char coordinates[90], response[512];
                 WeatherCityChoice *selected = &ui.matches[ui.match_selected];
-                snprintf(coordinates, sizeof coordinates, "%.6f %.6f",
-                         selected->latitude, selected->longitude);
+                snprintf(coordinates, sizeof coordinates, "%d %.6f %.6f",
+                         ui.city_target, selected->latitude, selected->longitude);
                 if (!service_command("savecity", coordinates, response, sizeof response) &&
                     strstr(response, "\tok\t")) {
                     ui.search_result = 2;
-                    ui.slot = 1;
+                    ui.slot = ui.city_target;
                 } else {
                     ui.search_result = -1;
                 }
