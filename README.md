@@ -16,13 +16,13 @@ A lightweight, full-screen weather application for the Shanling Q2 running [Q2 P
 
 | Screen | Wheel | Centre | Return |
 | --- | --- | --- | --- |
-| Locations | Select current or saved location | Open selected location's dashboard | Exit Weather |\n| Forecast dashboard | Select forecast day | Open day details | Locations |
+| Locations | Select Current, Saved, or Settings | Open highlighted location or Settings | Exit Weather |\n| Forecast dashboard | Select forecast day | Open day details | Locations |
 | Day detail | Select day | Return to forecast dashboard | Forecast dashboard |
 | Settings | Select setting | Activate setting | Dashboard |
 | City entry | Select QWERTY key | Type / Space / Clear / Backspace / Search | Cancel / Settings |
 | City results | Scroll matching locations | Save highlighted city and coordinates | Return to QWERTY keyboard |
 
-**Touch:** Tap **SETTINGS** on the initial Locations screen, tap Current Location or Saved Location to open its forecast dashboard, then tap a forecast day for details. An unconfigured saved location opens city entry automatically. The built-in QWERTY keyboard supports **SPACE**, **CLEAR** (erase the entire city entry), **<--** (delete one character), and **SEARCH**, all selectable with the click-wheel or touchscreen. City lookup runs off the graphics thread; a firmware keyboard patch is not required. After searching, a result picker displays three matches at a time with safe spacing for the Q2's rounded screen. Scroll to a matching state/province and country, then press Center or tap to save it. The selection is checked against the returned coordinates before writing the location cache. A saved location includes the region and country to distinguish similarly named cities.
+**Touch:** Tap **SETTINGS** on the initial Locations screen, tap Current Location or Saved Location to open its forecast dashboard, then tap a forecast day for details. An unconfigured saved location opens city entry automatically. The built-in QWERTY keyboard supports an **ABC/123** toggle for digits and punctuation, **SPACE**, **CLEAR** (erase the entire city entry), a drawn **backspace arrow** (delete one character), and **SEARCH**, all selectable with the click-wheel or touchscreen. Settings is also a third highlighted click-wheel choice on the initial locations screen. City lookup runs off the graphics thread; a firmware keyboard patch is not required. After searching, a result picker displays three matches at a time with safe spacing for the Q2's rounded screen. Scroll to a matching state/province and country, then press Center or tap to save it. The selection is checked against the returned coordinates before writing the location cache. A saved location includes the region and country to distinguish similarly named cities.
 
 **Settings:** Change saved city; toggle Celsius/Fahrenheit; refresh both locations; clear saved city. Weather follows Q2 Pod's Minimal, Classic and Modern themes, their separate accent choices, and Light Mode (including automatic day/night). The screen has centered title and rounded-corner-safe margins.
 
