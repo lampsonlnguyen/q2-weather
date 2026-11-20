@@ -466,7 +466,14 @@ static void handle(char **args, int count, Reply *r) {
                 WeatherGeoResult *item = &rt.search_matches[i];
                 if (fabs(lat - item->latitude) < 0.000001 &&
                     fabs(lon - item->longitude) < 0.000001) {
-                    snprintf(city, sizeof city, "%s", item->name);
+                    if (item->region[0] && item->country[0])
+                        snprintf(city, sizeof city, "%.35s, %.12s, %.12s",
+                                 item->name, item->region, item->country);
+                    else if (item->country[0])
+                        snprintf(city, sizeof city, "%.44s, %.18s",
+                                 item->name, item->country);
+                    else
+                        snprintf(city, sizeof city, "%s", item->name);
                     found = 1;
                     break;
                 }
