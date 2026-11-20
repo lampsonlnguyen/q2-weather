@@ -31,8 +31,8 @@ typedef struct {
     int error;
     int units_f;
     char search[80];
-    char search_name[Q2_WEATHER_NAME];
-    double search_lat, search_lon;
+    WeatherGeoResult search_matches[WEATHER_GEO_MAX];
+    int search_count;
     int search_pending, search_found, search_generation;
     int generation, rerun;
 } Runtime;
@@ -267,21 +267,18 @@ static void refresh(void) {
 /* City lookup also runs on a worker: field edits never block Q2 Pod. */
 static void *search_worker(void *unused) {
     (void)unused;
-    char query[sizeof rt.search], city[Q2_WEATHER_NAME];
+    char query[sizeof rt.search];
     pthread_mutex_lock(&state_mutex);
     snprintf(query, sizeof query, "%s", rt.search);
     int generation = rt.search_generation;
     pthread_mutex_unlock(&state_mutex);
-    double lat = 0, lon = 0;
-    int ok = !weather_geocode(query, city, sizeof city, &lat, &lon);
+    WeatherGeoResult matches[WEATHER_GEO_MAX] = {0};
+    int count = weather_geocode_many(query, matches);
     pthread_mutex_lock(&state_mutex);
     if (generation == rt.search_generation) {
-        rt.search_found = ok;
-        if (ok) {
-            snprintf(rt.search_name, sizeof rt.search_name, "%s", city);
-            rt.search_lat = lat;
-            rt.search_lon = lon;
-        }
+        rt.search_count = count > 0 ? count : 0;
+        rt.search_found = count > 0;
+        if (count > 0) memcpy(rt.search_matches, matches, (size_t)count * sizeof matches[0]);
         rt.search_pending = 0;
     }
     pthread_mutex_unlock(&state_mutex);
@@ -294,6 +291,7 @@ static void start_search(const char *query) {
     rt.search_generation++;
     rt.search_pending = 1;
     rt.search_found = 0;
+    rt.search_count = 0;
     pthread_mutex_unlock(&state_mutex);
     pthread_t thread;
     if (pthread_create(&thread, NULL, search_worker, NULL)) {
@@ -413,24 +411,32 @@ static void page_menu(Reply *r) {
 }
 
 static void page_cities(Reply *r) {
-    char name[Q2_WEATHER_NAME], coord[80];
-    int pending, found, searched;
-    double lat, lon;
+    WeatherGeoResult matches[WEATHER_GEO_MAX];
+    int pending, count, searched;
     pthread_mutex_lock(&state_mutex);
     pending = rt.search_pending;
-    found = rt.search_found;
+    count = rt.search_count;
     searched = rt.search[0] != 0;
-    snprintf(name, sizeof name, "%s", rt.search_name);
-    lat = rt.search_lat;
-    lon = rt.search_lon;
+    if (count > 0) memcpy(matches, rt.search_matches, (size_t)count * sizeof matches[0]);
     pthread_mutex_unlock(&state_mutex);
     row(r, "field", "citysearch", "City name:", "Enter city to search", "");
     if (pending) {
         info(r, "Searching city", "Checking Open-Meteo");
         snprintf(r->message, sizeof r->message, "refresh");
-    } else if (found) {
-        snprintf(coord, sizeof coord, "%.6f %.6f", lat, lon);
-        row(r, "action", "savecity", name, "Save this city", coord);
+    } else if (count > 0) {
+        for (int i = 0; i < count; ++i) {
+            char coord[80], region[160];
+            snprintf(coord, sizeof coord, "%.6f %.6f", matches[i].latitude,
+                     matches[i].longitude);
+            if (matches[i].region[0] && matches[i].country[0])
+                snprintf(region, sizeof region, "%s, %s", matches[i].region,
+                         matches[i].country);
+            else
+                snprintf(region, sizeof region, "%s%s%s",
+                         matches[i].region, matches[i].region[0] &&
+                         matches[i].country[0] ? ", " : "", matches[i].country);
+            row(r, "action", "savecity", matches[i].name, region, coord);
+        }
     } else if (searched) {
         info(r, "No city found", "Check spelling or Wi-Fi and search again");
     }
@@ -451,15 +457,23 @@ static void handle(char **args, int count, Reply *r) {
         page_cities(r);
     } else if (!strcmp(operation, "savecity")) {
         double lat, lon;
-        char city[Q2_WEATHER_NAME];
+        char city[Q2_WEATHER_NAME] = {0};
+        int found = 0;
         pthread_mutex_lock(&state_mutex);
-        snprintf(city, sizeof city, "%s", rt.search_name);
-        double expected_lat = rt.search_lat;
-        double expected_lon = rt.search_lon;
-        int found = rt.search_found && !rt.search_pending;
+        if (!rt.search_pending && rt.search_count > 0 &&
+            sscanf(arg, "%lf %lf", &lat, &lon) == 2) {
+            for (int i = 0; i < rt.search_count; ++i) {
+                WeatherGeoResult *item = &rt.search_matches[i];
+                if (fabs(lat - item->latitude) < 0.000001 &&
+                    fabs(lon - item->longitude) < 0.000001) {
+                    snprintf(city, sizeof city, "%s", item->name);
+                    found = 1;
+                    break;
+                }
+            }
+        }
         pthread_mutex_unlock(&state_mutex);
-        if (!found || sscanf(arg, "%lf %lf", &lat, &lon) != 2 ||
-            fabs(lat - expected_lat) > 0.000001 || fabs(lon - expected_lon) > 0.000001) {
+        if (!found) {
             snprintf(r->status, sizeof r->status, "error");
             snprintf(r->message, sizeof r->message, "Please search again");
         } else {
