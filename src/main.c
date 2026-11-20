@@ -159,14 +159,13 @@ static int wifi_power(void *unused, int enable) {
     return -1;
 }
 
+/* Do not use the IP geolocation provider as a network preflight.
+ * It can fail independently of Open-Meteo and must not prevent a saved
+ * location from receiving a forecast. Each request checks connectivity. */
 static int wait_online(void *unused, int timeout_seconds) {
     (void)unused;
-    for (int i = 0; i < timeout_seconds && !stopped; i += 2) {
-        char body[4096];
-        if (!http_get("https://ipwho.is/", body, sizeof body)) return 0;
-        sleep(2);
-    }
-    return -1;
+    (void)timeout_seconds;
+    return stopped ? -1 : 0;
 }
 
 static int detect(void *unused, char *name, size_t cap, double *lat, double *lon) {
