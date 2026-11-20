@@ -104,7 +104,26 @@ int main(void) {
     assert(dashboard_input(&ui, "k d 170") == 1);
     assert(ui.page == 0);
 
+    /* Home city can be entered manually when IP geolocation is unavailable. */
+    Dashboard home;
+    dashboard_init(&home);
+    assert(dashboard_input(&home, "k d 218") == 1);
+    assert(home.page == 3 && home.city_target == 0);
+    assert(dashboard_input(&home, "k d 170") == 1);
+    assert(home.page == 2);
+    home.keyboard_index = 4;
+    assert(dashboard_input(&home, "k d 218") == 1);
+    assert(home.page == 3 && home.city_target == 0);
+    assert(dashboard_input(&home, "t u 105 127") == 1);
+    assert(dashboard_input(&home, "t u 310 257") == 1);
+    assert(home.search_request && home.page == 2);
+    home.page = 5;
+    home.match_count = 1;
+    assert(dashboard_input(&home, "k d 218") == 1);
+    assert(home.save_request && home.city_target == 0);
+
     /* Touch selected location and move forward/backward through forecast. */
+    assert(weather_set_location(&ui.weather, 0, "Manual Home", 33.77, -117.94) == 0);
     assert(dashboard_input(&ui, "t u 75 90") == 1);
     assert(ui.slot == 0 && ui.page == 1 && ui.day == 0);
     assert(dashboard_input(&ui, "w -55") == 1);
