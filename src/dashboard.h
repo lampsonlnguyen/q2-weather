@@ -22,6 +22,7 @@ typedef struct {
     int wheel_percent;
     int language_id;
     int ready;
+    char network_status[80];
     int detailed;
     int redraw;
     int quit;
@@ -30,6 +31,7 @@ typedef struct {
     int keyboard_index;
     int keyboard_numbers; /* 0 ABC, 1 123/symbols */
     int home_selected; /* Current, Saved, Settings */
+    int city_target; /* 0 Home, 1 Saved */
     int search_request;
     int refresh_request;
     int clear_request;

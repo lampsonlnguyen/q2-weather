@@ -8,6 +8,7 @@
 #include <string.h>
 #include <time.h>
 #include <errno.h>
+#include <unistd.h>
 
 /* Link to Q2 Pod's own libcurl; values are from curl/curl.h. */
 void *curl_easy_init(void);
@@ -49,43 +50,63 @@ static size_t receive(char *data, size_t size, size_t count, void *user) {
     return n;
 }
 
+/* Retry transient DNS, connect and timeout errors, but not HTTP 4xx or
+ * JSON parsing problems. Keep each attempt bounded for the Q2 battery. */
 int http_get(const char *url, char *body, size_t capacity) {
     if (!url || !body || capacity < 2) return -1;
-    Reply r = {body, 0, capacity};
-    body[0] = 0;
-    void *curl = curl_easy_init();
-    if (!curl) return -1;
-    curl_easy_setopt(curl, 10002, url); /* CURLOPT_URL */
-    curl_easy_setopt(curl, 10018, "Q2 Weather/0.1"); /* USERAGENT */
-    curl_easy_setopt(curl, 20011, receive); /* WRITEFUNCTION */
-    curl_easy_setopt(curl, 10001, &r); /* WRITEDATA */
-    curl_easy_setopt(curl, 78, 10L); /* CONNECTTIMEOUT */
-    curl_easy_setopt(curl, 13, 20L); /* TIMEOUT */
-    curl_easy_setopt(curl, 99, 1L); /* NOSIGNAL */
-    curl_easy_setopt(curl, 52, 1L); /* FOLLOWLOCATION */
+    const char *endpoint = strstr(url, "geocoding-api.open-meteo.com")
+                               ? "open-meteo geocoding"
+                               : strstr(url, "api.open-meteo.com")
+                                     ? "open-meteo forecast"
+                                     : strstr(url, "ipapi.co") ? "ipapi.co" : "ipwho.is";
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        Reply r = {body, 0, capacity};
+        body[0] = 0;
+        void *curl = curl_easy_init();
+        if (!curl) {
+            snprintf(error_text, sizeof error_text, "%s: curl init failed", endpoint);
+            weather_log("HTTP", error_text);
+            return -1;
+        }
+        curl_easy_setopt(curl, 10002, url); /* CURLOPT_URL */
+        curl_easy_setopt(curl, 10018, "Q2 Weather/0.1"); /* USERAGENT */
+        curl_easy_setopt(curl, 20011, receive); /* WRITEFUNCTION */
+        curl_easy_setopt(curl, 10001, &r); /* WRITEDATA */
+        curl_easy_setopt(curl, 78, 7L); /* CONNECTTIMEOUT */
+        curl_easy_setopt(curl, 13, 12L); /* TIMEOUT */
+        curl_easy_setopt(curl, 99, 1L); /* NOSIGNAL */
+        curl_easy_setopt(curl, 52, 1L); /* FOLLOWLOCATION */
 #ifndef HOST
-    curl_easy_setopt(curl, 10065, "/etc/scrobble-ca.pem"); /* CAINFO */
+        curl_easy_setopt(curl, 10065, "/etc/scrobble-ca.pem"); /* CAINFO */
 #endif
-    curl_easy_setopt(curl, 64, 1L); /* SSL_VERIFYPEER */
-    curl_easy_setopt(curl, 81, 2L); /* SSL_VERIFYHOST */
-    long status = 0;
-    int result = curl_easy_perform(curl);
-    if (!result) (void)curl_easy_getinfo(curl, 0x200002, &status);
-    int ok = result == 0 && status == 200 && r.used;
-    if (!ok) {
-        const char *endpoint = strstr(url, "api.open-meteo.com")
-                                   ? "open-meteo forecast"
-                                   : strstr(url, "geocoding-api.open-meteo.com")
-                                         ? "open-meteo geocoding"
-                                         : "ipwho.is";
-        snprintf(error_text, sizeof error_text, "%s: curl=%d HTTP=%ld bytes=%zu", endpoint,
-                 result, status, r.used);
+        curl_easy_setopt(curl, 64, 1L); /* SSL_VERIFYPEER */
+        curl_easy_setopt(curl, 81, 2L); /* SSL_VERIFYHOST */
+        long status = 0;
+        int result = curl_easy_perform(curl);
+        if (!result) (void)curl_easy_getinfo(curl, 0x200002, &status);
+        int ok = result == 0 && status == 200 && r.used;
+        curl_easy_cleanup(curl);
+        if (ok) {
+            error_text[0] = 0;
+            return 0;
+        }
+        const char *reason = result == 6 ? "DNS unavailable"
+                             : result == 7 ? "Connection failed"
+                             : result == 28 ? "Connection timed out"
+                             : result == 60 ? "TLS certificate error"
+                             : status >= 400 ? "HTTP service error"
+                             : "Network request failed";
+        snprintf(error_text, sizeof error_text,
+                 "%s: %s (curl=%d HTTP=%ld bytes=%zu attempt=%d)",
+                 endpoint, reason, result, status, r.used, attempt + 1);
         weather_log("HTTP", error_text);
-    } else {
-        error_text[0] = 0;
+        if (attempt == 1 || (result != 6 && result != 7 && result != 28))
+            break;
+#ifndef HOST
+        sleep(1);
+#endif
     }
-    curl_easy_cleanup(curl);
-    return ok ? 0 : -1;
+    return -1;
 }
 
 /* Small JSON accessor for well-defined API responses. Strings with escaped
@@ -171,14 +192,29 @@ static int date_array(const char *json, char dates[][11], int count) {
     return 0;
 }
 
+/* IP geolocation is approximate and may be rate limited or unavailable.
+ * Try an independent HTTPS provider before giving up. Forecast requests do
+ * not depend on either provider succeeding. */
 int weather_geolocate(char *city, size_t cap, double *lat, double *lon) {
+    static const char *providers[] = {
+        "https://ipwho.is/",
+        "https://ipapi.co/json/"
+    };
     char body[8192];
-    if (http_get("https://ipwho.is/", body, sizeof body) ||
-        strstr(body, "\"success\":false") ||
-        value_string(body, "city", city, cap) ||
-        value_number(body, "latitude", lat) || value_number(body, "longitude", lon))
-        return -1;
-    return *lat >= -90 && *lat <= 90 && *lon >= -180 && *lon <= 180 ? 0 : -1;
+    if (!city || cap < 2 || !lat || !lon) return -1;
+    for (size_t i = 0; i < sizeof providers / sizeof providers[0]; i++) {
+        city[0] = 0;
+        if (http_get(providers[i], body, sizeof body)) continue;
+        if (strstr(body, "\"success\":false") ||
+            value_string(body, "city", city, cap) ||
+            value_number(body, "latitude", lat) ||
+            value_number(body, "longitude", lon) ||
+            *lat < -90 || *lat > 90 || *lon < -180 || *lon > 180)
+            continue;
+        return 0;
+    }
+    weather_log("GEO", "Automatic IP location failed for both providers");
+    return -1;
 }
 
 static int encode(const char *input, char *output, size_t capacity) {

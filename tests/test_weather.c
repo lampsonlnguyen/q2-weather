@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-typedef struct {int on,enabled,disabled,fail_online,fail_geo,fail_weather,requests;} Fake;
+typedef struct {int on,enabled,disabled,fail_online,fail_geo,fail_weather,requests,saved_first;} Fake;
 static int state(void*p){return ((Fake*)p)->on;}
 static int power(void*p,int value){
  Fake*f=p;f->on=value;if(value)f->enabled++;else f->disabled++;return 0;
@@ -14,7 +14,7 @@ static int geo(void*p,char*n,size_t c,double*a,double*b){
  snprintf(n,c,"Approximate City");*a=33.77;*b=-117.94;return 0;
 }
 static int forecast(void*p,double a,double b,int*t,int*h,int*c,long*stamp){
- Fake*f=p;assert(a>=-90&&a<=90&&b>=-180&&b<=180);f->requests++;
+ Fake*f=p;assert(a>=-90&&a<=90&&b>=-180&&b<=180);if(!f->requests && a==11.94 && b==108.44)f->saved_first=1;f->requests++;
  if(f->fail_weather)return -1;
  *t=22;*h=65;*c=3;*stamp=1795000000;return 0;
 }
@@ -37,6 +37,7 @@ int main(void){
  Fake f={0};WeatherBackend b=backend(&f);
  assert(weather_on_open(&app,&b)==0);
  assert(f.enabled==1&&f.disabled==1&&!f.on&&f.requests==2);
+ assert(f.saved_first); /* Saved coordinates do not depend on IP detection. */
  assert(strcmp(app.locations[0].name,"Approximate City")==0);
  assert(app.locations[0].valid&&app.locations[1].temperature_c==22);
  assert(app.locations[0].forecast_valid&&app.locations[1].forecast_valid);
@@ -58,6 +59,7 @@ int main(void){
  assert(weather_refresh(&app,&b,1)==WEATHER_GEO);
  assert(f.enabled==1&&f.disabled==1);
  assert(f.requests==2); /* Both previously known cities still refresh. */
+ assert(f.saved_first); /* Saved city fetched before failed IP geolocation. */
  f=(Fake){.fail_weather=1};b=backend(&f);
  assert(weather_refresh(&app,&b,0)==WEATHER_FETCH);
  assert(f.enabled==1&&f.disabled==1);
