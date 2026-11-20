@@ -470,7 +470,7 @@ static void handle(char **args, int count, Reply *r) {
                         snprintf(city, sizeof city, "%.26s, %.16s, %.16s",
                                  item->name, item->region, item->country);
                     else if (item->country[0])
-                        snprintf(city, sizeof city, "%.44s, %.18s",
+                        snprintf(city, sizeof city, "%.42s, %.18s",
                                  item->name, item->country);
                     else
                         snprintf(city, sizeof city, "%s", item->name);
