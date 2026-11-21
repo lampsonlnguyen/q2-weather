@@ -124,8 +124,8 @@ int main(void) {
     fail_ipwho = 0;
 
     /* City search remains available when Open-Meteo geocoding fails. */
-    response = "[{\\"display_name\\":\\"Westminster, California, United States\\","
-               "\\"lat\\":\\"33.759\\",\\"lon\\":\\"-117.987\\"}]";
+    response = "[{\"display_name\":\"Westminster, California, United States\","
+               "\"lat\":\"33.759\",\"lon\":\"-117.987\"}]";
     fail_open_meteo = 1;
     WeatherGeoResult osm[WEATHER_GEO_MAX] = {0};
     assert(weather_geocode_many("Westminster", osm) == 1);
