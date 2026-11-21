@@ -1,22 +1,32 @@
 # Q2 Weather
 
-## Independent weather and location fallbacks
-
-- **Forecast:** Open-Meteo is primary. If the forecast request fails, the Q2 tries the independently hosted [MET Norway Locationforecast 2.0](https://api.met.no/weatherapi/locationforecast/2.0/documentation). Its hourly UTC readings are aggregated into seven daily forecasts. MET Norway does not supply the same precipitation probability fields, so absent probabilities display as unavailable.
-- **Current/Home Location:** Approximate public-IP detection tries `ipwho.is` and then `ipapi.co`. If both fail, open **Current Location** or **Settings → Set Home City** to search and select a city manually.
-- **Manual city search:** Open-Meteo geocoding is primary; OpenStreetMap Nominatim is the independent backup. Choosing a city saves its coordinates for later forecast requests. A manually set Home stays set between restarts; to restore automatic IP location detection, delete `.weather/manual-home` from the SD card.
-- **Saved Location:** Uses saved latitude/longitude directly and fetches its forecast *before* any public-IP location detection, including when both IP providers are down. It never needs the current-location services.
-- **Offline:** Previously cached weather remains visible. If both forecast providers are unavailable, changing the location cannot produce new weather until at least one forecast provider recovers.
-- **Attribution:** Backup forecast data © Norwegian Meteorological Institute (MET Norway), CC BY 4.0. Backup place-search data © OpenStreetMap contributors, ODbL.
-
-
 A lightweight, full-screen weather application for the Shanling Q2 running [Q2 Pod](https://github.com/DiamondBond/q2-pod). **One app under Library → Weather.**
+
+**Latest release: v1.3.0** — independent weather and location fallbacks. See [CHANGELOG.md](CHANGELOG.md) for the complete release notes.
+
+## Primary and fallback services
+
+| Purpose | Primary | Automatic fallback | When both fail |
+| --- | --- | --- | --- |
+| Weather and 7-day forecast | [Open-Meteo Forecast](https://open-meteo.com/en/docs) | [MET Norway Locationforecast 2.0](https://api.met.no/weatherapi/locationforecast/2.0/documentation) | Retain previously cached weather; no fresh forecast until a provider is reachable |
+| Approximate Current Location by public IP | [ipwho.is](https://ipwho.is/) | [ipapi.co](https://ipapi.co/) | Set Home City manually from the Current Location entry or Settings |
+| City search for manual selection | [Open-Meteo Geocoding](https://open-meteo.com/en/docs/geocoding-api) | [OpenStreetMap Nominatim](https://nominatim.org/) | Keep any previously selected location; retry search when connectivity returns |
+| Saved Location weather | Stored latitude/longitude → Open-Meteo | Same stored coordinates → MET Norway | Keep the Saved Location and cached forecast; **never requires Current Location detection** |
+
+### How location fallback works
+
+- **Current Location:** Automatic location is approximate (based on the public IP address, not GPS). If both IP-location services fail, select an unconfigured Current Location, or open **Settings → Set Home City**, and pick a city using the built-in QWERTY keyboard.
+- **Manual Home City:** The chosen city's coordinates persist across restarts and prevent automatic IP detection from replacing it. To return to automatic detection, remove `.weather/manual-home` from the microSD card.
+- **Saved Location:** Uses its stored coordinates directly. Its weather request runs **before** IP-based Current Location detection, so an IP service outage does not block Saved Location.
+- **Forecast fallback:** Open-Meteo is tried first. When it fails or returns incomplete daily data, the app tries MET Norway. MET Norway's UTC time series is grouped into seven daily forecasts, so its daily high/low values and day boundaries may differ from Open-Meteo. Precipitation percentages that the fallback does not provide are displayed as unavailable rather than guessed.
+- **Offline:** A manual city choice still requires the city-search API to be reachable (Open-Meteo or Nominatim). Selecting a city cannot restore weather forecasts when *both* forecast providers are unreachable. Existing cached forecasts remain available.
+- **Provider attribution:** Fallback forecast data © Norwegian Meteorological Institute (MET Norway), CC BY 4.0. Place-search fallback data © OpenStreetMap contributors, ODbL.
 
 ## Features
 
 - One Weather Library app that opens to a **location list**. Select Current Location or Saved Location to expand into that location's graphical seven-day forecast dashboard.
-- Current location detected approximately from the Q2 public IP using [ipwho.is](https://ipwho.is/).
-- One saved city using Weather's **built-in QWERTY keyboard**, operated by the click-wheel or touchscreen and [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api). Searches return up to eight **city, state/province, country** matches so you select the exact destination.
+- Current Location supports two public-IP providers and persistent manual Home City selection.
+- One Saved Location with direct coordinate-based forecasts, plus a separate manual Home City. The **built-in QWERTY keyboard** supports click-wheel and touchscreen city search with a geocoding fallback and up to eight matches.
 - Weather conditions, Celsius/Fahrenheit, humidity, daily high/low and precipitation chance.
 - Offline cache; background refresh on opening the dashboard and explicit refresh in Settings.
 - No API key, SDL, animation loop, runtime JPEG/PNG decoding, or sound engine.
@@ -32,9 +42,9 @@ A lightweight, full-screen weather application for the Shanling Q2 running [Q2 P
 | City entry | Select QWERTY key | Type / Space / Clear / Backspace / Search | Cancel / Settings |
 | City results | Scroll matching locations | Save highlighted city and coordinates | Return to QWERTY keyboard |
 
-**Touch:** Tap **SETTINGS** on the initial Locations screen, tap Current Location or Saved Location to open its forecast dashboard, then tap a forecast day for details. An unconfigured saved location opens city entry automatically. The built-in QWERTY keyboard supports an **ABC/123** toggle for digits and punctuation, **SPACE**, **CLEAR** (erase the entire city entry), a drawn **backspace arrow** (delete one character), and **SEARCH**, all selectable with the click-wheel or touchscreen. Settings is also a third highlighted click-wheel choice on the initial locations screen. City lookup runs off the graphics thread; a firmware keyboard patch is not required. After searching, a result picker displays three matches at a time with safe spacing for the Q2's rounded screen. Scroll to a matching state/province and country, then press Center or tap to save it. The selection is checked against the returned coordinates before writing the location cache. A saved location includes the region and country to distinguish similarly named cities.
+**Touch:** Tap **SETTINGS** on the initial Locations screen, tap Current Location or Saved Location to open its forecast dashboard, then tap a forecast day for details. An unconfigured Current or Saved Location opens city entry automatically. The built-in QWERTY keyboard supports an **ABC/123** toggle for digits and punctuation, **SPACE**, **CLEAR** (erase the entire city entry), a drawn **backspace arrow** (delete one character), and **SEARCH**, all selectable with the click-wheel or touchscreen. Settings is also a third highlighted click-wheel choice on the initial locations screen. City lookup runs off the graphics thread; a firmware keyboard patch is not required. After searching, a result picker displays three matches at a time with safe spacing for the Q2's rounded screen. Scroll to a matching state/province and country, then press Center or tap to save it. The selection is checked against the returned coordinates before writing the location cache. A saved location includes the region and country to distinguish similarly named cities.
 
-**Settings:** Change saved city; toggle Celsius/Fahrenheit; refresh both locations; clear saved city. Weather follows Q2 Pod's Minimal, Classic and Modern themes, their separate accent choices, and Light Mode (including automatic day/night). The screen has centered title and rounded-corner-safe margins.
+**Settings:** Change saved city; toggle Celsius/Fahrenheit; refresh both locations; clear saved city; set Home City manually. Weather follows Q2 Pod's Minimal, Classic and Modern themes, their separate accent choices, and Light Mode (including automatic day/night). The screen has centered title and rounded-corner-safe margins.
 
 ## Install or upgrade
 
@@ -48,7 +58,8 @@ Download the latest `q2-weather.zip` from [GitHub Releases](https://github.com/l
 ├── lang/0.lang             # editable English UI labels; future numeric language packs
 ├── icon.png                # yellow-sun launcher (from assets/icon.png)
 ├── state                  # created on Q2; retain when upgrading
-└── units                  # created on Q2
+├── units                  # created on Q2
+└── manual-home            # optional, created after manual Home City selection
 ```
 
 **Important if upgrading from v0.3.x:** Delete the old `.weather-view` folder from the SD card. Otherwise Q2 Pod may still show the previously installed **Weather Dashboard** as a second app. Do **not** delete `.weather/state`; your saved location and offline forecast live there.
@@ -125,8 +136,8 @@ The cache is stored on the SD card at `.weather/state`, and network diagnostics 
 
 ## License and credits
 
-Built for Q2 Pod with thanks to DiamondBond and the Q2 community. The small sprite-rendering approach follows the technical design of [q2-diamond-crush](https://github.com/lampsonlnguyen/q2-diamond-crush). Weather data comes from Open-Meteo.
+Built for Q2 Pod with thanks to DiamondBond and the Q2 community. The small sprite-rendering approach follows the technical design of [q2-diamond-crush](https://github.com/lampsonlnguyen/q2-diamond-crush). Weather forecasts use Open-Meteo with MET Norway as a fallback. IP-based location uses ipwho.is with ipapi.co as fallback; city search uses Open-Meteo geocoding with OpenStreetMap Nominatim as fallback.
 
 ### Weather icon attribution
 
-The color weather icons are adapted from [Tomorrow.io Weather Code Icons](https://github.com/Tomorrow-IO-API/tomorrow-weather-codes), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). **Powered by Tomorrow.io** ([weather API](https://www.tomorrow.io/weather-api/)) — artwork only; forecasts continue to come from Open-Meteo. Attributions and the exact original asset mapping are documented in [assets/sprites/ATTRIBUTION.md](assets/sprites/ATTRIBUTION.md). The `wind.png` and `humidity.png` icons are original Q2 Weather artwork. Replace any PNG under `assets/sprites/` to customize your own build; the build resizes all icons automatically.
+The color weather icons are adapted from [Tomorrow.io Weather Code Icons](https://github.com/Tomorrow-IO-API/tomorrow-weather-codes), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). **Powered by Tomorrow.io** ([weather API](https://www.tomorrow.io/weather-api/)) — artwork only; weather forecasts are retrieved from Open-Meteo or MET Norway. Attributions and the exact original asset mapping are documented in [assets/sprites/ATTRIBUTION.md](assets/sprites/ATTRIBUTION.md). The `wind.png` and `humidity.png` icons are original Q2 Weather artwork. Replace any PNG under `assets/sprites/` to customize your own build; the build resizes all icons automatically.
