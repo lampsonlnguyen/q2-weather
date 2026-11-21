@@ -80,7 +80,7 @@ static int unescape(char *p) {
             continue;
         }
         if (!p[1] || !p[2]) return -1;
-        char digits[3] = {p[1], p[2], 0};
+        char digits[3] = { p[1], p[2], 0 };
         char *end = NULL;
         long value = strtol(digits, &end, 16);
         if (*end || value < 1 || value > 255) return -1;
@@ -94,14 +94,14 @@ static int unescape(char *p) {
 static void row(Reply *reply, const char *kind, const char *uri, const char *title,
                 const char *subtitle, const char *context) {
     if (reply->count >= 50) return;
-    const char *parts[] = {kind, uri, title, subtitle, context, ""};
+    const char *parts[] = { kind, uri, title, subtitle, context, "" };
     char escaped[6][1024];
     for (int i = 0; i < 6; i++) {
         if (escape(escaped[i], sizeof escaped[i], parts[i]) < 0) return;
     }
     size_t left = sizeof reply->rows - reply->used;
-    int n = snprintf(reply->rows + reply->used, left, "%s\t%s\t%s\t%s\t%s\t%s\n",
-                     escaped[0], escaped[1], escaped[2], escaped[3], escaped[4], escaped[5]);
+    int n = snprintf(reply->rows + reply->used, left, "%s\t%s\t%s\t%s\t%s\t%s\n", escaped[0],
+                     escaped[1], escaped[2], escaped[3], escaped[4], escaped[5]);
     if (n <= 0 || (size_t)n >= left) return;
     reply->used += (size_t)n;
     reply->count++;
@@ -127,16 +127,13 @@ static void save_state(void) {
     if (n < 0) return;
     FILE *f = fopen(STATE_TEMP, "wb");
     if (!f) return;
-    int ok = fwrite(buf, 1, (size_t)n, f) == (size_t)n && !fflush(f) &&
-             !fsync(fileno(f));
+    int ok = fwrite(buf, 1, (size_t)n, f) == (size_t)n && !fflush(f) && !fsync(fileno(f));
     if (fclose(f)) ok = 0;
     if (!ok || rename(STATE_TEMP, STATE_PATH)) unlink(STATE_TEMP);
 }
 
 /* Manual Home remains selected across refreshes and restarts. */
-static int manual_home_enabled(void) {
-    return access(MANUAL_HOME_PATH, F_OK) == 0;
-}
+static int manual_home_enabled(void) { return access(MANUAL_HOME_PATH, F_OK) == 0; }
 
 static int enable_manual_home(void) {
     FILE *f = fopen(MANUAL_HOME_PATH, "wb");
@@ -200,8 +197,8 @@ static int weather_current(void *unused, double lat, double lon, int *temp, int 
     int highs[Q2_FORECAST_DAYS], lows[Q2_FORECAST_DAYS], rain[Q2_FORECAST_DAYS];
     int codes[Q2_FORECAST_DAYS];
     fc.ready = 0;
-    int result = weather_request(lat, lon, temp, humidity, code, updated, dates, highs,
-                                 lows, rain, codes, Q2_FORECAST_DAYS);
+    int result = weather_request(lat, lon, temp, humidity, code, updated, dates, highs, lows, rain,
+                                 codes, Q2_FORECAST_DAYS);
     if (result < 0) return -1;
     if (result > 0) return 0; /* Current conditions succeeded without daily data. */
     for (int i = 0; i < Q2_FORECAST_DAYS; i++) {
@@ -225,9 +222,8 @@ static int weather_daily(void *unused, double lat, double lon, WeatherDay *days,
     return 0;
 }
 
-static const WeatherBackend backend = {
-    NULL, wifi_state, wifi_power, wait_online, detect, weather_current, weather_daily
-};
+static const WeatherBackend backend = { NULL,   wifi_state,      wifi_power,   wait_online,
+                                        detect, weather_current, weather_daily };
 
 /* Network calls run outside the Library browser's 15-second request timeout. */
 static void *refresh_worker(void *unused) {
@@ -283,7 +279,7 @@ static void *search_worker(void *unused) {
     snprintf(query, sizeof query, "%s", rt.search);
     int generation = rt.search_generation;
     pthread_mutex_unlock(&state_mutex);
-    WeatherGeoResult matches[WEATHER_GEO_MAX] = {0};
+    WeatherGeoResult matches[WEATHER_GEO_MAX] = { 0 };
     int count = weather_geocode_many(query, matches);
     pthread_mutex_lock(&state_mutex);
     if (generation == rt.search_generation) {
@@ -406,8 +402,7 @@ static void page_menu(Reply *r) {
             snprintf(sub, sizeof sub, "%s", l->used ? l->name : "Not yet configured");
         }
         if (l->valid) weather_art_row("location", i ? "1" : "0", l->weather_code);
-        row(r, "list", "location", i ? "Saved Location" : "Current Location", sub,
-            i ? "1" : "0");
+        row(r, "list", "location", i ? "Saved Location" : "Current Location", sub, i ? "1" : "0");
     }
     row(r, "action", "refresh", "Refresh weather", "Update both locations", "");
     row(r, "list", "cities", "Choose saved city", "Enter a city name", "");
@@ -417,8 +412,7 @@ static void page_menu(Reply *r) {
         info(r, "Wi-Fi is off", "Enable Wi-Fi in Q2 settings to refresh");
     else if (error)
         info(r, "Weather may be cached", "Refresh was unsuccessful");
-    if (error)
-        info(r, "Diagnostics", "See .weather/weather.log on the SD card");
+    if (error) info(r, "Diagnostics", "See .weather/weather.log on the SD card");
 }
 
 static void page_cities(Reply *r) {
@@ -437,15 +431,13 @@ static void page_cities(Reply *r) {
     } else if (count > 0) {
         for (int i = 0; i < count; ++i) {
             char coord[80], region[160];
-            snprintf(coord, sizeof coord, "%.6f %.6f", matches[i].latitude,
-                     matches[i].longitude);
+            snprintf(coord, sizeof coord, "%.6f %.6f", matches[i].latitude, matches[i].longitude);
             if (matches[i].region[0] && matches[i].country[0])
-                snprintf(region, sizeof region, "%s, %s", matches[i].region,
-                         matches[i].country);
+                snprintf(region, sizeof region, "%s, %s", matches[i].region, matches[i].country);
             else
-                snprintf(region, sizeof region, "%s%s%s",
-                         matches[i].region, matches[i].region[0] &&
-                         matches[i].country[0] ? ", " : "", matches[i].country);
+                snprintf(region, sizeof region, "%s%s%s", matches[i].region,
+                         matches[i].region[0] && matches[i].country[0] ? ", " : "",
+                         matches[i].country);
             row(r, "action", "savecity", matches[i].name, region, coord);
         }
     } else if (searched) {
@@ -469,7 +461,7 @@ static void handle(char **args, int count, Reply *r) {
     } else if (!strcmp(operation, "savecity")) {
         double lat, lon;
         int slot = 1;
-        char city[Q2_WEATHER_NAME] = {0};
+        char city[Q2_WEATHER_NAME] = { 0 };
         int found = 0;
         pthread_mutex_lock(&state_mutex);
         int fields = sscanf(arg, "%d %lf %lf", &slot, &lat, &lon);
@@ -477,18 +469,16 @@ static void handle(char **args, int count, Reply *r) {
             slot = 1; /* Older client versions sent latitude/longitude only. */
             fields = sscanf(arg, "%lf %lf", &lat, &lon) == 2 ? 3 : 0;
         }
-        if (!rt.search_pending && rt.search_count > 0 &&
-            fields == 3 && (slot == 0 || slot == 1)) {
+        if (!rt.search_pending && rt.search_count > 0 && fields == 3 && (slot == 0 || slot == 1)) {
             for (int i = 0; i < rt.search_count; ++i) {
                 WeatherGeoResult *item = &rt.search_matches[i];
                 if (fabs(lat - item->latitude) < 0.000001 &&
                     fabs(lon - item->longitude) < 0.000001) {
                     if (item->region[0] && item->country[0])
-                        snprintf(city, sizeof city, "%.26s, %.16s, %.16s",
-                                 item->name, item->region, item->country);
+                        snprintf(city, sizeof city, "%.26s, %.16s, %.16s", item->name, item->region,
+                                 item->country);
                     else if (item->country[0])
-                        snprintf(city, sizeof city, "%.42s, %.18s",
-                                 item->name, item->country);
+                        snprintf(city, sizeof city, "%.42s, %.18s", item->name, item->country);
                     else
                         snprintf(city, sizeof city, "%s", item->name);
                     found = 1;
@@ -552,24 +542,21 @@ static int send_all(int fd, const char *data, size_t len) {
 
 static void answer(int socket_fd) {
     char request[WIRE_MAX + 1], header[512], msg[384];
-    Reply reply = {0};
-    struct timeval timeout = {5, 0};
+    Reply reply = { 0 };
+    struct timeval timeout = { 5, 0 };
     setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
     int n = 0;
     ssize_t got;
-    while (n < WIRE_MAX &&
-           (got = read(socket_fd, request + n, (size_t)(WIRE_MAX - n))) > 0)
+    while (n < WIRE_MAX && (got = read(socket_fd, request + n, (size_t)(WIRE_MAX - n))) > 0)
         n += (int)got;
     request[n] = 0;
-    char *fields[12] = {0};
+    char *fields[12] = { 0 };
     int fields_count = 0;
     if (!strncmp(request, "Q2SPOT/1\n", 9)) {
         char *line = request + 9;
         line[strcspn(line, "\n")] = 0;
         char *cursor = line;
-        while (fields_count < 12 && cursor) {
-            fields[fields_count++] = strsep(&cursor, "\t");
-        }
+        while (fields_count < 12 && cursor) { fields[fields_count++] = strsep(&cursor, "\t"); }
         for (int i = 0; i < fields_count; i++) {
             if (unescape(fields[i])) fields_count = 0;
         }
@@ -580,8 +567,7 @@ static void answer(int socket_fd) {
         snprintf(reply.status, sizeof reply.status, "bad");
     if (escape(msg, sizeof msg, reply.message) < 0) msg[0] = 0;
     const char *id = fields_count ? fields[0] : "0";
-    int hn = snprintf(header, sizeof header, "Q2SPOT/1\n%.20s\t%s\t%s\t\n", id,
-                      reply.status, msg);
+    int hn = snprintf(header, sizeof header, "Q2SPOT/1\n%.20s\t%s\t%s\t\n", id, reply.status, msg);
     if (hn > 0 && hn < (int)sizeof header) {
         if (!send_all(socket_fd, header, (size_t)hn) && reply.used)
             (void)send_all(socket_fd, reply.rows, reply.used);
@@ -596,13 +582,12 @@ int main(void) {
     weather_init(&rt.app);
     load_state();
     weather_art_init();
-    struct sockaddr_un addr = {0};
+    struct sockaddr_un addr = { 0 };
     addr.sun_family = AF_UNIX;
     snprintf(addr.sun_path, sizeof addr.sun_path, "%s", SOCKET_PATH);
     unlink(SOCKET_PATH);
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0 || bind(fd, (struct sockaddr *)&addr, sizeof addr) ||
-        listen(fd, 4)) {
+    if (fd < 0 || bind(fd, (struct sockaddr *)&addr, sizeof addr) || listen(fd, 4)) {
         if (fd >= 0) close(fd);
         return 1;
     }
@@ -611,7 +596,7 @@ int main(void) {
     refresh();
     time_t last = time(NULL);
     while (!stopped && time(NULL) - last < 600) {
-        struct pollfd p = {fd, POLLIN, 0};
+        struct pollfd p = { fd, POLLIN, 0 };
         if (poll(&p, 1, 1000) > 0) {
             int accepted = accept(fd, NULL, NULL);
             if (accepted >= 0) {

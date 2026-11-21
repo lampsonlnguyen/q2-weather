@@ -49,7 +49,7 @@ static unsigned long now_ms(void) {
 static int connected_service(void) {
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) return 0;
-    struct sockaddr_un addr = {0};
+    struct sockaddr_un addr = { 0 };
     addr.sun_family = AF_UNIX;
     snprintf(addr.sun_path, sizeof addr.sun_path, "%s", BROWSE_SOCKET);
     int ok = !connect(fd, (struct sockaddr *)&addr, sizeof addr);
@@ -72,10 +72,10 @@ static pid_t start_service(void) {
 static int service_command(const char *op, const char *arg, char *response, size_t cap) {
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) return -1;
-    struct sockaddr_un address = {0};
+    struct sockaddr_un address = { 0 };
     address.sun_family = AF_UNIX;
     snprintf(address.sun_path, sizeof address.sun_path, "%s", BROWSE_SOCKET);
-    struct timeval timeout = {2, 0};
+    struct timeval timeout = { 2, 0 };
     (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
     (void)setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof timeout);
     if (connect(fd, (struct sockaddr *)&address, sizeof address)) {
@@ -83,8 +83,7 @@ static int service_command(const char *op, const char *arg, char *response, size
         return -1;
     }
     char request[256];
-    int count = snprintf(request, sizeof request, "Q2SPOT/1\n1\t%s\t%s\n",
-                         op, arg ? arg : "");
+    int count = snprintf(request, sizeof request, "Q2SPOT/1\n1\t%s\t%s\n", op, arg ? arg : "");
     if (count < 0 || count >= (int)sizeof request ||
         send(fd, request, (size_t)count, MSG_NOSIGNAL) != count) {
         close(fd);
@@ -116,8 +115,7 @@ static char city_job[48];
 static int parse_choices(char *reply, WeatherCityChoice out[WEATHER_CITY_RESULTS_MAX]) {
     int count = 0;
     char *save = NULL;
-    for (char *line = strtok_r(reply, "\n", &save); line;
-         line = strtok_r(NULL, "\n", &save)) {
+    for (char *line = strtok_r(reply, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
         const char *prefix = "action\tsavecity\t";
         if (strncmp(line, prefix, strlen(prefix))) continue;
         char *name = line + strlen(prefix);
@@ -129,9 +127,9 @@ static int parse_choices(char *reply, WeatherCityChoice out[WEATHER_CITY_RESULTS
         if (!tab) continue;
         *tab++ = 0;
         double lat = 0, lon = 0;
-        if (sscanf(tab, "%lf %lf", &lat, &lon) != 2 ||
-            lat < -90 || lat > 90 || lon < -180 || lon > 180 ||
-            !name[0] || count == WEATHER_CITY_RESULTS_MAX) continue;
+        if (sscanf(tab, "%lf %lf", &lat, &lon) != 2 || lat < -90 || lat > 90 || lon < -180 ||
+            lon > 180 || !name[0] || count == WEATHER_CITY_RESULTS_MAX)
+            continue;
         WeatherCityChoice *choice = &out[count];
         snprintf(choice->name, sizeof choice->name, "%s", name);
         snprintf(choice->region, sizeof choice->region, "%s", region);
@@ -148,7 +146,7 @@ static void *city_lookup(void *unused) {
     snprintf(query, sizeof query, "%s", city_job);
     int generation = atomic_load(&city_generation);
     char response[4096];
-    WeatherCityChoice found[WEATHER_CITY_RESULTS_MAX] = {0};
+    WeatherCityChoice found[WEATHER_CITY_RESULTS_MAX] = { 0 };
     int count = -1;
     if (!service_command("citysearch", query, response, sizeof response)) {
         for (int attempt = 0; attempt < 18 && !interrupted; attempt++) {
@@ -232,7 +230,7 @@ static int read_cache(Dashboard *ui) {
 static int open_input(void) {
     int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (fd < 0) return -1;
-    struct sockaddr_un address = {0};
+    struct sockaddr_un address = { 0 };
     address.sun_family = AF_UNIX;
     snprintf(address.sun_path, sizeof address.sun_path, "%s", INPUT_SOCKET);
     unlink(INPUT_SOCKET);
@@ -263,8 +261,7 @@ int main(void) {
     }
     struct fb_var_screeninfo var;
     struct fb_fix_screeninfo fix;
-    if (ioctl(fb, FBIOGET_VSCREENINFO, &var) ||
-        ioctl(fb, FBIOGET_FSCREENINFO, &fix)) {
+    if (ioctl(fb, FBIOGET_VSCREENINFO, &var) || ioctl(fb, FBIOGET_FSCREENINFO, &fix)) {
         close(fb);
         if (service > 0) kill(service, SIGTERM);
         return 1;
@@ -272,9 +269,9 @@ int main(void) {
     unsigned stride = fix.line_length / sizeof(uint32_t);
     unsigned front = var.yoffset;
     unsigned rows = fix.line_length ? fix.smem_len / fix.line_length : 0;
-    if (var.xres != DASH_HEIGHT || var.yres != DASH_WIDTH ||
-        var.bits_per_pixel != 32 || fix.line_length % sizeof(uint32_t) ||
-        stride < DASH_HEIGHT || rows < DASH_WIDTH || front > rows - DASH_WIDTH) {
+    if (var.xres != DASH_HEIGHT || var.yres != DASH_WIDTH || var.bits_per_pixel != 32 ||
+        fix.line_length % sizeof(uint32_t) || stride < DASH_HEIGHT || rows < DASH_WIDTH ||
+        front > rows - DASH_WIDTH) {
         close(fb);
         if (service > 0) kill(service, SIGTERM);
         return 1;
@@ -358,8 +355,8 @@ int main(void) {
             if (ui.match_selected >= 0 && ui.match_selected < ui.match_count) {
                 char coordinates[90], response[512];
                 WeatherCityChoice *selected = &ui.matches[ui.match_selected];
-                snprintf(coordinates, sizeof coordinates, "%d %.6f %.6f",
-                         ui.city_target, selected->latitude, selected->longitude);
+                snprintf(coordinates, sizeof coordinates, "%d %.6f %.6f", ui.city_target,
+                         selected->latitude, selected->longitude);
                 if (!service_command("savecity", coordinates, response, sizeof response) &&
                     strstr(response, "\tok\t")) {
                     ui.search_result = 2;
@@ -396,7 +393,7 @@ int main(void) {
             }
             ui.redraw = 0;
         }
-        struct pollfd pfd = {input, POLLIN, 0};
+        struct pollfd pfd = { input, POLLIN, 0 };
         int got = poll(&pfd, 1, 1000);
         if (got > 0 && (pfd.revents & POLLIN)) {
             char msg[160];

@@ -12,7 +12,9 @@
 
 /* Separate high-contrast palettes; Q2 settings determine the active half.
  * Palette accents track the firmware's selected theme/accent family. */
-typedef struct { uint32_t bg, panel, raised, outline, highlight, text, muted, gold, rain; } Palette;
+typedef struct {
+    uint32_t bg, panel, raised, outline, highlight, text, muted, gold, rain;
+} Palette;
 static Palette palette;
 #define BG palette.bg
 #define PANEL palette.panel
@@ -29,28 +31,26 @@ static void choose_palette(const Dashboard *ui) {
      * Minimal, Classic and Modern each have distinct light/dark surfaces. */
     if (ui->theme_id == 1) { /* Classic: ivory/silver with glossy selection */
         palette = ui->theme_light
-                      ? (Palette){0xf8f8f6u, 0xffffffffu, 0xe4e7ebu, 0xa6a8abu,
-                                  0x007dbeu, 0x191a1bu, 0x52565bu, 0x976900u, 0x3168a3u}
-                      : (Palette){0x111112u, 0x242426u, 0x3b3b3du, 0x5d6066u,
-                                  0x5da7eeu, 0xf7f8f9u, 0xd5d7dau, 0xffca63u, 0x91b8edu};
+                      ? (Palette){ 0xf8f8f6u, 0xffffffffu, 0xe4e7ebu, 0xa6a8abu, 0x007dbeu,
+                                   0x191a1bu, 0x52565bu,   0x976900u, 0x3168a3u }
+                      : (Palette){ 0x111112u, 0x242426u, 0x3b3b3du, 0x5d6066u, 0x5da7eeu,
+                                   0xf7f8f9u, 0xd5d7dau, 0xffca63u, 0x91b8edu };
     } else if (ui->theme_id == 2) { /* Modern: flatter iPod-style cards */
         palette = ui->theme_light
-                      ? (Palette){0xf5f5f6u, 0xffffffffu, 0xeceef2u, 0xaaaeb6u,
-                                  0x234a9du, 0x1a1a1cu, 0x484d58u, 0x875900u, 0x245d9au}
-                      : (Palette){0x121316u, 0x22242au, 0x343741u, 0x646a75u,
-                                  0xaab5d5u, 0xf8f8fau, 0xc5cad4u, 0xffd06bu, 0x94bff1u};
+                      ? (Palette){ 0xf5f5f6u, 0xffffffffu, 0xeceef2u, 0xaaaeb6u, 0x234a9du,
+                                   0x1a1a1cu, 0x484d58u,   0x875900u, 0x245d9au }
+                      : (Palette){ 0x121316u, 0x22242au, 0x343741u, 0x646a75u, 0xaab5d5u,
+                                   0xf8f8fau, 0xc5cad4u, 0xffd06bu, 0x94bff1u };
     } else { /* Minimal: monochrome graphite with the user's accent */
         palette = ui->theme_light
-                      ? (Palette){0xf8f8f8u, 0xffffffffu, 0xe8e8e8u, 0xb1b1b1u,
-                                  0x4d4d4du, 0x171717u, 0x505050u, 0x845a06u, 0x255e9du}
-                      : (Palette){0x101010u, 0x202020u, 0x383838u, 0x707070u,
-                                  0xbcbcbcu, 0xf6f6f6u, 0xd1d1d1u, 0xffd477u, 0x9ac8f5u};
+                      ? (Palette){ 0xf8f8f8u, 0xffffffffu, 0xe8e8e8u, 0xb1b1b1u, 0x4d4d4du,
+                                   0x171717u, 0x505050u,   0x845a06u, 0x255e9du }
+                      : (Palette){ 0x101010u, 0x202020u, 0x383838u, 0x707070u, 0xbcbcbcu,
+                                   0xf6f6f6u, 0xd1d1d1u, 0xffd477u, 0x9ac8f5u };
     }
     /* Higher contrast than the stock tint for legibility on the small Q2. */
-    static const uint32_t dark_accent[] = {
-        0xbfc1c4u, 0xff8295u, 0x90dbd4u, 0xe0c88cu, 0x9bbcffu,
-        0xffb487u, 0xdb9fcfu, 0xf2e3c1u, 0xb9dc89u, 0x7ebfffu
-    };
+    static const uint32_t dark_accent[] = { 0xbfc1c4u, 0xff8295u, 0x90dbd4u, 0xe0c88cu, 0x9bbcffu,
+                                            0xffb487u, 0xdb9fcfu, 0xf2e3c1u, 0xb9dc89u, 0x7ebfffu };
     static const uint32_t light_accent[] = {
         0x464646u, 0x9c213fu, 0x086a69u, 0x6f5918u, 0x1d4e9au,
         0x8b410au, 0x77294fu, 0x5c4b25u, 0x436521u, 0x075e9cu
@@ -87,8 +87,8 @@ static uint32_t blend(uint32_t back, uint32_t front, unsigned alpha) {
     return 0xff000000u | (r << 16) | (g << 8) | b;
 }
 
-static void pixel_blend(uint32_t *dst, unsigned stride, int x, int y,
-                        uint32_t color, unsigned alpha) {
+static void pixel_blend(uint32_t *dst, unsigned stride, int x, int y, uint32_t color,
+                        unsigned alpha) {
     if (x < 0 || y < 0 || x >= DASH_WIDTH || y >= DASH_HEIGHT || !alpha) return;
     uint32_t *p = &dst[(unsigned)x * stride + DASH_HEIGHT - y - 1];
     *p = blend(*p, color, alpha);
@@ -125,8 +125,7 @@ static int text_width(const char *s, int large) {
     for (; *s; ++s) {
         unsigned char c = (unsigned char)*s;
         if (c < 32 || c > 126) c = '?';
-        width += large ? weather_font_large_advance[c - 32]
-                       : weather_font_small_advance[c - 32];
+        width += large ? weather_font_large_advance[c - 32] : weather_font_small_advance[c - 32];
     }
     return width;
 }
@@ -147,11 +146,10 @@ static const char *condition(int code) {
 
 static int icon_index(int code) {
     const char *icon = weather_art_icon(code);
-    static const char *const names[] = {
-        "sunny", "partly", "cloudy", "overcast", "fog", "drizzle", "rain",
-        "showers", "thunder", "snow", "snowshowers", "night", "nightcloud",
-        "wind", "humidity"
-    };
+    static const char *const names[] = { "sunny",      "partly",  "cloudy",      "overcast",
+                                         "fog",        "drizzle", "rain",        "showers",
+                                         "thunder",    "snow",    "snowshowers", "night",
+                                         "nightcloud", "wind",    "humidity" };
     for (int i = 0; i < 15; ++i) {
         if (!strcmp(icon, names[i])) return i;
     }
@@ -167,14 +165,12 @@ static void icon(uint32_t *dst, unsigned stride, int x, int y, int code, int sca
             if (!alpha) continue;
             for (int yy = 0; yy < scale; yy++)
                 for (int xx = 0; xx < scale; xx++)
-                    pixel_blend(dst, stride, x + px * scale + xx,
-                                y + py * scale + yy, argb & 0xffffffu, alpha);
+                    pixel_blend(dst, stride, x + px * scale + xx, y + py * scale + yy,
+                                argb & 0xffffffu, alpha);
         }
 }
 
-static int units(int c, int f) {
-    return f ? c * 9 / 5 + 32 : c;
-}
+static int units(int c, int f) { return f ? c * 9 / 5 + 32 : c; }
 
 static void location(uint32_t *dst, unsigned stride, const Dashboard *ui, int slot, int y,
                      int height) {
@@ -184,8 +180,7 @@ static void location(uint32_t *dst, unsigned stride, const Dashboard *ui, int sl
     frame(dst, stride, 31, y, 196, height, slot == ui->slot ? HIGHLIGHT : BORDER);
     label(dst, stride, 43, y + 5, slot ? TR(SAVED_LOCATION) : TR(CURRENT_LOCATION), 1, DIM, 18);
     if (!loc->used) {
-        label(dst, stride, 43, y + 31, slot ? TR(ADD_CITY) : TR(FINDING_LOCATION),
-              1, TEXT, 24);
+        label(dst, stride, 43, y + 31, slot ? TR(ADD_CITY) : TR(FINDING_LOCATION), 1, TEXT, 24);
         return;
     }
     label(dst, stride, 43, y + 20, loc->name, 1, TEXT, 22);
@@ -202,14 +197,12 @@ static void location(uint32_t *dst, unsigned stride, const Dashboard *ui, int sl
 }
 
 /* The entry page mirrors the original Weather app: pick a location first. */
-static void location_choice(uint32_t *dst, unsigned stride, const Dashboard *ui,
-                            int slot, int y) {
+static void location_choice(uint32_t *dst, unsigned stride, const Dashboard *ui, int slot, int y) {
     const WeatherLocation *loc = &ui->weather.locations[slot];
     uint32_t fill = slot == ui->home_selected ? PANEL_LIGHT : PANEL;
     rect(dst, stride, 31, y, 313, 90, fill);
     frame(dst, stride, 31, y, 313, 90, slot == ui->home_selected ? HIGHLIGHT : BORDER);
-    label(dst, stride, 43, y + 6, slot ? TR(SAVED_LOCATION) : TR(CURRENT_LOCATION), 1,
-          DIM, 21);
+    label(dst, stride, 43, y + 6, slot ? TR(SAVED_LOCATION) : TR(CURRENT_LOCATION), 1, DIM, 21);
     if (loc->used) {
         label(dst, stride, 43, y + 27, loc->name, 2, TEXT, 16);
         if (loc->valid) {
@@ -222,10 +215,8 @@ static void location_choice(uint32_t *dst, unsigned stride, const Dashboard *ui,
             label(dst, stride, 43, y + 64, TR(LOADING), 1, DIM, 26);
         }
     } else {
-        label(dst, stride, 43, y + 31,
-              slot ? TR(ADD_CITY) : "SET HOME CITY", 2, TEXT, 20);
-        label(dst, stride, 43, y + 64,
-              slot ? TR(CHOOSE_CITY) : "CHOOSE CITY", 1, DIM, 29);
+        label(dst, stride, 43, y + 31, slot ? TR(ADD_CITY) : "SET HOME CITY", 2, TEXT, 20);
+        label(dst, stride, 43, y + 64, slot ? TR(CHOOSE_CITY) : "CHOOSE CITY", 1, DIM, 29);
     }
 }
 
@@ -263,33 +254,28 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
         label(dst, stride, 42, 12, back, 1, TEXT, 12);
     }
     const char *title = TR(WEATHER);
-    label(dst, stride, (DASH_WIDTH - text_width(title, 0)) / 2, 12,
-          title, 1, TEXT, 24);
+    label(dst, stride, (DASH_WIDTH - text_width(title, 0)) / 2, 12, title, 1, TEXT, 24);
     if (ui->page == 0) {
         int selected = ui->home_selected == 2;
         rect(dst, stride, 266, 9, 68, 25, selected ? PANEL_LIGHT : PANEL);
         frame(dst, stride, 266, 9, 68, 25, selected ? HIGHLIGHT : BORDER);
-        label(dst, stride, 300 - text_width(TR(SETTINGS), 0) / 2, 12,
-              TR(SETTINGS), 1, selected ? HIGHLIGHT : DIM, 14);
+        label(dst, stride, 300 - text_width(TR(SETTINGS), 0) / 2, 12, TR(SETTINGS), 1,
+              selected ? HIGHLIGHT : DIM, 14);
     } else
         label(dst, stride, 279, 12, "Q2 POD", 1, DIM, 8);
     if (ui->page == 3) {
-        label(dst, stride, 43, 49, ui->city_target ? TR(SEARCH_CITY) : "SET HOME CITY",
-              1, TEXT, 23);
+        label(dst, stride, 43, 49, ui->city_target ? TR(SEARCH_CITY) : "SET HOME CITY", 1, TEXT,
+              23);
         rect(dst, stride, 33, 72, 309, 34, PANEL);
         frame(dst, stride, 33, 72, 309, 34, HIGHLIGHT);
-        label(dst, stride, 45, 80, ui->city_length ? ui->city_query : "City name...",
-              1, ui->city_length ? TEXT : DIM, 35);
-        static const char *const letters[] = {
-            "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"
-        };
-        static const char *const numbers[] = {
-            "1234567890", "-./'@#&()", "+*?=!:,"
-        };
+        label(dst, stride, 45, 80, ui->city_length ? ui->city_query : "City name...", 1,
+              ui->city_length ? TEXT : DIM, 35);
+        static const char *const letters[] = { "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" };
+        static const char *const numbers[] = { "1234567890", "-./'@#&()", "+*?=!:," };
         const char *const *rows = ui->keyboard_numbers ? numbers : letters;
-        const int offsets[] = {32, 47, 78};
-        const int starts[] = {0, 10, 19};
-        const int tops[] = {115, 154, 193};
+        const int offsets[] = { 32, 47, 78 };
+        const int starts[] = { 0, 10, 19 };
+        const int tops[] = { 115, 154, 193 };
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; rows[row][col]; ++col) {
                 int index = starts[row] + col;
@@ -298,10 +284,9 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
                 int selected = ui->keyboard_index == index;
                 rect(dst, stride, x, y, 29, 32, selected ? HIGHLIGHT : PANEL_LIGHT);
                 frame(dst, stride, x, y, 29, 32, selected ? HIGHLIGHT : BORDER);
-                char letter[] = {rows[row][col], 0};
+                char letter[] = { rows[row][col], 0 };
                 int width = text_width(letter, 0);
-                label(dst, stride, x + (29 - width) / 2, y + 8, letter, 1,
-                      selected ? BG : TEXT, 1);
+                label(dst, stride, x + (29 - width) / 2, y + 8, letter, 1, selected ? BG : TEXT, 1);
             }
         }
         /* The action row has five buttons safely inside the rounded screen.
@@ -320,11 +305,11 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
                     rect(dst, stride, x + 23 + d, 255 + d, 2, 2, ink);
                 }
             } else {
-                const char *text = i == 0 ? (ui->keyboard_numbers ? "ABC" : "123")
+                const char *text = i == 0   ? (ui->keyboard_numbers ? "ABC" : "123")
                                    : i == 1 ? "SPACE"
-                                   : i == 2 ? "CLEAR" : "SEARCH";
-                label(dst, stride, x + (59 - text_width(text, 0)) / 2,
-                      248, text, 1, ink, 8);
+                                   : i == 2 ? "CLEAR"
+                                            : "SEARCH";
+                label(dst, stride, x + (59 - text_width(text, 0)) / 2, 248, text, 1, ink, 8);
             }
         }
         label(dst, stride, 42, 289, "WHEEL SELECT   CENTER TYPE   BACK", 1, DIM, 39);
@@ -333,8 +318,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
     if (ui->page == 5) {
         label(dst, stride, 43, 49, "SELECT LOCATION", 1, TEXT, 21);
         char summary[55];
-        snprintf(summary, sizeof summary, "%d matches - select exact city",
-                 ui->match_count);
+        snprintf(summary, sizeof summary, "%d matches - select exact city", ui->match_count);
         label(dst, stride, 43, 72, summary, 1, DIM, 36);
         int start = (ui->match_selected / 3) * 3;
         for (int row = 0; row < 3 && start + row < ui->match_count; ++row) {
@@ -343,16 +327,14 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             int selected = idx == ui->match_selected;
             rect(dst, stride, 34, y, 307, 54, selected ? PANEL_LIGHT : PANEL);
             frame(dst, stride, 34, y, 307, 54, selected ? HIGHLIGHT : BORDER);
-            label(dst, stride, 46, y + 3, ui->matches[idx].name,
-                  1, selected ? HIGHLIGHT : TEXT, 32);
-            label(dst, stride, 46, y + 26, ui->matches[idx].region,
-                  1, DIM, 36);
+            label(dst, stride, 46, y + 3, ui->matches[idx].name, 1, selected ? HIGHLIGHT : TEXT,
+                  32);
+            label(dst, stride, 46, y + 26, ui->matches[idx].region, 1, DIM, 36);
             label(dst, stride, 322, y + 12, ">", 1, HIGHLIGHT, 1);
         }
         if (ui->match_count > 3) {
             char progress[20];
-            snprintf(progress, sizeof progress, "%d / %d", ui->match_selected + 1,
-                     ui->match_count);
+            snprintf(progress, sizeof progress, "%d / %d", ui->match_selected + 1, ui->match_count);
             label(dst, stride, 275, 277, progress, 1, DIM, 12);
         }
         label(dst, stride, 43, 290, "WHEEL  CENTER SELECT  BACK", 1, DIM, 35);
@@ -360,17 +342,15 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
     }
     if (ui->page == 2) {
         label(dst, stride, 40, 47, TR(SETTINGS), 2, TEXT, 16);
-        const char *titles[] = {TR(CHANGE_CITY), TR(UNITS), TR(REFRESH),
-                                TR(CLEAR_CITY), "Set Home City"};
+        const char *titles[] = { TR(CHANGE_CITY), TR(UNITS), TR(REFRESH), TR(CLEAR_CITY),
+                                 "Set Home City" };
         for (int i = 0; i < 5; i++) {
             int y = 76 + i * 48;
             rect(dst, stride, 31, y, 313, 43, ui->keyboard_index == i ? PANEL_LIGHT : PANEL);
-            frame(dst, stride, 31, y, 313, 43,
-                  ui->keyboard_index == i ? HIGHLIGHT : BORDER);
+            frame(dst, stride, 31, y, 313, 43, ui->keyboard_index == i ? HIGHLIGHT : BORDER);
             label(dst, stride, 43, y + 12, titles[i], 1, TEXT, 25);
             if (i == 1)
-                label(dst, stride, 292, y + 12, ui->units_f ? "FAHR" : "CELS", 1,
-                      HIGHLIGHT, 5);
+                label(dst, stride, 292, y + 12, ui->units_f ? "FAHR" : "CELS", 1, HIGHLIGHT, 5);
         }
         /* Fifth setting uses the former footer area. */
         return;
@@ -407,8 +387,7 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
             const WeatherDay *day = &loc->days[ui->day];
             icon(dst, stride, 39, 104, day->weather_code, 4);
             label(dst, stride, 152, 104, day->date, 1, DIM, 11);
-            label(dst, stride, 152, 125, condition(day->weather_code), 1,
-                  TEXT, 27);
+            label(dst, stride, 152, 125, condition(day->weather_code), 1, TEXT, 27);
             char text[48];
             snprintf(text, sizeof text, "%s %d%c", TR(HIGH), units(day->high_c, ui->units_f),
                      ui->units_f ? 'F' : 'C');

@@ -51,19 +51,20 @@ static size_t receive(char *data, size_t size, size_t count, void *user) {
 
 int http_get(const char *url, char *body, size_t capacity) {
     if (!url || !body || capacity < 2) return -1;
-    Reply r = {body, 0, capacity};
+    Reply r = { body, 0, capacity };
     body[0] = 0;
     void *curl = curl_easy_init();
     if (!curl) return -1;
     curl_easy_setopt(curl, 10002, url); /* CURLOPT_URL */
-    curl_easy_setopt(curl, 10018,
-                     "Q2Weather/1.2 (+https://github.com/lampsonlnguyen/q2-weather)"); /* USERAGENT */
-    curl_easy_setopt(curl, 20011, receive); /* WRITEFUNCTION */
-    curl_easy_setopt(curl, 10001, &r); /* WRITEDATA */
-    curl_easy_setopt(curl, 78, 10L); /* CONNECTTIMEOUT */
-    curl_easy_setopt(curl, 13, 20L); /* TIMEOUT */
-    curl_easy_setopt(curl, 99, 1L); /* NOSIGNAL */
-    curl_easy_setopt(curl, 52, 1L); /* FOLLOWLOCATION */
+    curl_easy_setopt(
+        curl, 10018,
+        "Q2Weather/1.2 (+https://github.com/lampsonlnguyen/q2-weather)"); /* USERAGENT */
+    curl_easy_setopt(curl, 20011, receive);                               /* WRITEFUNCTION */
+    curl_easy_setopt(curl, 10001, &r);                                    /* WRITEDATA */
+    curl_easy_setopt(curl, 78, 10L);                                      /* CONNECTTIMEOUT */
+    curl_easy_setopt(curl, 13, 20L);                                      /* TIMEOUT */
+    curl_easy_setopt(curl, 99, 1L);                                       /* NOSIGNAL */
+    curl_easy_setopt(curl, 52, 1L);                                       /* FOLLOWLOCATION */
 #ifndef HOST
     curl_easy_setopt(curl, 10065, "/etc/scrobble-ca.pem"); /* CAINFO */
 #endif
@@ -74,16 +75,15 @@ int http_get(const char *url, char *body, size_t capacity) {
     if (!result) (void)curl_easy_getinfo(curl, 0x200002, &status);
     int ok = result == 0 && status == 200 && r.used;
     if (!ok) {
-        const char *endpoint = strstr(url, "api.met.no") ? "met.no forecast" :
-                               strstr(url, "nominatim.openstreetmap.org") ? "nominatim geocoding" :
-                               strstr(url, "ipapi.co") ? "ipapi.co location" :
-                               strstr(url, "api.open-meteo.com")
-                                   ? "open-meteo forecast"
-                                   : strstr(url, "geocoding-api.open-meteo.com")
-                                         ? "open-meteo geocoding"
-                                         : "ipwho.is";
-        snprintf(error_text, sizeof error_text, "%s: curl=%d HTTP=%ld bytes=%zu", endpoint,
-                 result, status, r.used);
+        const char *endpoint = strstr(url, "api.met.no")                    ? "met.no forecast"
+                               : strstr(url, "nominatim.openstreetmap.org") ? "nominatim geocoding"
+                               : strstr(url, "ipapi.co")                    ? "ipapi.co location"
+                               : strstr(url, "api.open-meteo.com")          ? "open-meteo forecast"
+                               : strstr(url, "geocoding-api.open-meteo.com")
+                                   ? "open-meteo geocoding"
+                                   : "ipwho.is";
+        snprintf(error_text, sizeof error_text, "%s: curl=%d HTTP=%ld bytes=%zu", endpoint, result,
+                 status, r.used);
         weather_log("HTTP", error_text);
     } else {
         error_text[0] = 0;
@@ -178,18 +178,14 @@ static int date_array(const char *json, char dates[][11], int count) {
 /* IP location is optional. Provider failures cannot block forecasts for
  * already configured cities. A second independent provider is attempted. */
 int weather_geolocate(char *city, size_t cap, double *lat, double *lon) {
-    static const char *providers[] = {
-        "https://ipwho.is/", "https://ipapi.co/json/"
-    };
+    static const char *providers[] = { "https://ipwho.is/", "https://ipapi.co/json/" };
     char body[8192];
     if (!city || cap < 2 || !lat || !lon) return -1;
     for (size_t i = 0; i < 2; ++i) {
         city[0] = 0;
         if (http_get(providers[i], body, sizeof body)) continue;
-        if (strstr(body, "\"success\":false") ||
-            value_string(body, "city", city, cap) ||
-            value_number(body, "latitude", lat) ||
-            value_number(body, "longitude", lon) ||
+        if (strstr(body, "\"success\":false") || value_string(body, "city", city, cap) ||
+            value_number(body, "latitude", lat) || value_number(body, "longitude", lon) ||
             *lat < -90 || *lat > 90 || *lon < -180 || *lon > 180)
             continue;
         return 0;
@@ -233,11 +229,22 @@ int weather_geocode_parse(const char *json, WeatherGeoResult results[WEATHER_GEO
         const char *start = p++;
         int quoted = 0, escape_char = 0, depth = 1;
         while (*p && depth) {
-            if (escape_char) { escape_char = 0; ++p; continue; }
-            if (*p == '\\' && quoted) { escape_char = 1; ++p; continue; }
-            if (*p == '"') quoted = !quoted;
-            else if (!quoted && *p == '{') ++depth;
-            else if (!quoted && *p == '}') --depth;
+            if (escape_char) {
+                escape_char = 0;
+                ++p;
+                continue;
+            }
+            if (*p == '\\' && quoted) {
+                escape_char = 1;
+                ++p;
+                continue;
+            }
+            if (*p == '"')
+                quoted = !quoted;
+            else if (!quoted && *p == '{')
+                ++depth;
+            else if (!quoted && *p == '}')
+                --depth;
             ++p;
         }
         if (depth) return -1;
@@ -246,12 +253,12 @@ int weather_geocode_parse(const char *json, WeatherGeoResult results[WEATHER_GEO
         char object[2048];
         memcpy(object, start, len);
         object[len] = 0;
-        WeatherGeoResult item = {0};
+        WeatherGeoResult item = { 0 };
         if (value_string(object, "name", item.name, sizeof item.name) ||
             value_number(object, "latitude", &item.latitude) ||
-            value_number(object, "longitude", &item.longitude) ||
-            item.latitude < -90 || item.latitude > 90 ||
-            item.longitude < -180 || item.longitude > 180) return -1;
+            value_number(object, "longitude", &item.longitude) || item.latitude < -90 ||
+            item.latitude > 90 || item.longitude < -180 || item.longitude > 180)
+            return -1;
         (void)value_string(object, "admin1", item.region, sizeof item.region);
         (void)value_string(object, "country", item.country, sizeof item.country);
         /* An empty country is valid in some API responses, but always
@@ -266,8 +273,7 @@ int weather_geocode_parse(const char *json, WeatherGeoResult results[WEATHER_GEO
 static int fallback_geocode(const char *encoded, WeatherGeoResult results[WEATHER_GEO_MAX]) {
     char url[512], body[32768];
     snprintf(url, sizeof url,
-             "https://nominatim.openstreetmap.org/search?q=%s&format=jsonv2&limit=8",
-             encoded);
+             "https://nominatim.openstreetmap.org/search?q=%s&format=jsonv2&limit=8", encoded);
     if (http_get(url, body, sizeof body)) return -1;
     const char *p = body;
     int count = 0;
@@ -281,13 +287,14 @@ static int fallback_geocode(const char *encoded, WeatherGeoResult results[WEATHE
         p = end + 1;
         if (value_string(object, "display_name", display, sizeof display) ||
             value_string(object, "lat", lat_text, sizeof lat_text) ||
-            value_string(object, "lon", lon_text, sizeof lon_text)) continue;
+            value_string(object, "lon", lon_text, sizeof lon_text))
+            continue;
         char *last_lat = NULL, *last_lon = NULL;
         double lat = strtod(lat_text, &last_lat);
         double lon = strtod(lon_text, &last_lon);
-        if (!last_lat || *last_lat || !last_lon || *last_lon ||
-            !isfinite(lat) || !isfinite(lon) ||
-            lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+        if (!last_lat || *last_lat || !last_lon || *last_lon || !isfinite(lat) || !isfinite(lon) ||
+            lat < -90 || lat > 90 || lon < -180 || lon > 180)
+            continue;
         WeatherGeoResult *item = &results[count++];
         size_t name_length = strcspn(display, ",");
         if (name_length >= sizeof item->name) name_length = sizeof item->name - 1;
@@ -304,9 +311,10 @@ static int fallback_geocode(const char *encoded, WeatherGeoResult results[WEATHE
 int weather_geocode_many(const char *query, WeatherGeoResult results[WEATHER_GEO_MAX]) {
     char encoded[256], url[512], body[32768];
     if (encode(query, encoded, sizeof encoded)) return -1;
-    snprintf(url, sizeof url,
-             "https://geocoding-api.open-meteo.com/v1/search?name=%s&count=8&language=en&format=json",
-             encoded);
+    snprintf(
+        url, sizeof url,
+        "https://geocoding-api.open-meteo.com/v1/search?name=%s&count=8&language=en&format=json",
+        encoded);
     if (!http_get(url, body, sizeof body)) {
         int count = weather_geocode_parse(body, results);
         if (count >= 0) return count;
@@ -315,7 +323,7 @@ int weather_geocode_many(const char *query, WeatherGeoResult results[WEATHER_GEO
 }
 
 int weather_geocode(const char *query, char *city, size_t cap, double *lat, double *lon) {
-    WeatherGeoResult results[WEATHER_GEO_MAX] = {0};
+    WeatherGeoResult results[WEATHER_GEO_MAX] = { 0 };
     int n = weather_geocode_many(query, results);
     if (n <= 0 || !city || !lat || !lon || !cap) return -1;
     if (snprintf(city, cap, "%s", results[0].name) >= (int)cap) return -1;
@@ -324,10 +332,9 @@ int weather_geocode(const char *query, char *city, size_t cap, double *lat, doub
     return 0;
 }
 
-static int weather_open_meteo_request(double lat, double lon, int *temp, int *humidity,
-                                      int *code, long *updated,
-                    char dates[][11], int highs[], int lows[], int precip[], int codes[],
-                    int day_count) {
+static int weather_open_meteo_request(double lat, double lon, int *temp, int *humidity, int *code,
+                                      long *updated, char dates[][11], int highs[], int lows[],
+                                      int precip[], int codes[], int day_count) {
     if (day_count != 7 || lat < -90 || lat > 90 || lon < -180 || lon > 180) return -1;
     char url[1024], body[16384];
     snprintf(url, sizeof url,
@@ -368,7 +375,6 @@ static int weather_open_meteo_request(double lat, double lon, int *temp, int *hu
     return 0;
 }
 
-
 /* MET Norway Locationforecast 2.0: independently hosted global forecast.
  * Daily values are aggregated from hourly/6-hourly UTC samples because this
  * API supplies a point time series rather than Open-Meteo-style daily arrays.
@@ -385,17 +391,16 @@ static int met_symbol_code(const char *symbol) {
     return 3;
 }
 
-static int weather_met_request(double lat, double lon, int *temp, int *humidity,
-                               int *code, long *updated, char dates[][11],
-                               int highs[], int lows[], int precip[],
-                               int codes[], int count) {
+static int weather_met_request(double lat, double lon, int *temp, int *humidity, int *code,
+                               long *updated, char dates[][11], int highs[], int lows[],
+                               int precip[], int codes[], int count) {
     /* The compact JSON commonly occupies tens of KB. Keep headroom without
      * allocating large persistent data structures on this embedded player. */
     char url[256];
     static char body[196608];
     snprintf(url, sizeof url,
-             "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=%.4f&lon=%.4f",
-             lat, lon);
+             "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=%.4f&lon=%.4f", lat,
+             lon);
     if (http_get(url, body, sizeof body)) return -1;
     const char *start = key_at(body, "timeseries");
     if (!start || *start != '[') return -1;
@@ -418,8 +423,7 @@ static int weather_met_request(double lat, double lon, int *temp, int *humidity,
         item[length] = 0;
         char iso[40], symbol[96];
         double t, h, clouds;
-        if (value_string(item, "time", iso, sizeof iso) ||
-            strlen(iso) < 10 ||
+        if (value_string(item, "time", iso, sizeof iso) || strlen(iso) < 10 ||
             value_number(item, "air_temperature", &t)) {
             if (!next) break;
             p = next;
@@ -438,7 +442,10 @@ static int weather_met_request(double lat, double lon, int *temp, int *humidity,
         }
         int day = -1;
         for (int i = 0; i < day_count; ++i)
-            if (!strncmp(dates[i], iso, 10)) { day = i; break; }
+            if (!strncmp(dates[i], iso, 10)) {
+                day = i;
+                break;
+            }
         if (day < 0) {
             if (day_count == count) break;
             day = day_count++;
@@ -449,8 +456,8 @@ static int weather_met_request(double lat, double lon, int *temp, int *humidity,
         if (rounded > highs[day]) highs[day] = rounded;
         if (rounded < lows[day]) lows[day] = rounded;
         double probability;
-        if (!value_number(item, "probability_of_precipitation", &probability) &&
-            probability >= 0 && probability <= 100) {
+        if (!value_number(item, "probability_of_precipitation", &probability) && probability >= 0 &&
+            probability <= 100) {
             int chance = (int)lround(probability);
             if (chance > precip[day]) precip[day] = chance;
         }
@@ -468,13 +475,14 @@ static int weather_met_request(double lat, double lon, int *temp, int *humidity,
 int weather_request(double lat, double lon, int *temp, int *humidity, int *code, long *updated,
                     char dates[][11], int highs[], int lows[], int precip[], int codes[],
                     int day_count) {
-    if (day_count != 7 || !isfinite(lat) || !isfinite(lon) ||
-        lat < -90 || lat > 90 || lon < -180 || lon > 180) return -1;
-    int result = weather_open_meteo_request(lat, lon, temp, humidity, code, updated,
-                                            dates, highs, lows, precip, codes, day_count);
+    if (day_count != 7 || !isfinite(lat) || !isfinite(lon) || lat < -90 || lat > 90 || lon < -180 ||
+        lon > 180)
+        return -1;
+    int result = weather_open_meteo_request(lat, lon, temp, humidity, code, updated, dates, highs,
+                                            lows, precip, codes, day_count);
     if (result >= 0) return result;
-    return weather_met_request(lat, lon, temp, humidity, code, updated,
-                               dates, highs, lows, precip, codes, day_count);
+    return weather_met_request(lat, lon, temp, humidity, code, updated, dates, highs, lows, precip,
+                               codes, day_count);
 }
 
 const char *weather_description(int code) {
