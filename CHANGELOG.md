@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — q2-pod theme look
+
+### Changed
+- **q2-pod theme inheritance:** Every screen is now a q2-pod list — 26 px status bar, 32 px rows, the active theme's own selection painter (Minimal's card, Classic's gloss stops, Modern's accent bar), chevron on the selected row, settings values right-aligned. Scheme values are ported from q2-pod itself (`src/q2pod_scheme.c`: `ACCENTS` tones from `patch/offsets.inc`, Classic Blue's band and gloss bar from `assets/themes/classic-light/theme.xml`, the HSV gloss derivation from `tools/theme.py`), resolved from the already-parsed theme/accent/Light Mode, so the app keeps following live theme changes.
+- **Text-only conditions:** All condition sprites are deleted — `assets/sprites/`, `tools/pack_sprites.py`, `tools/draw_weather_icons.py`, and the sprite atlas. Conditions are text with temperature/high/low/precipitation. The forecast is seven list rows instead of 45 px icon columns; the day detail is a list page; the keyboard keeps its QWERTY layout and behavior with theme selection and a **DEL** text key instead of the pixel-drawn backspace arrow.
+- **Fonts:** The build-time glyph rasterizer stays (font engine, not graphics) and is now packed by `tools/pack_fonts.py` into `build/weather_fonts.inc`. The launcher `assets/icon.png` is unchanged and is still the app's only image.
+- q2-pod's native art rows are unaffected: `src/art.c` still publishes JPEGs from `.weather/icons/` for the firmware's art rows.
+
+### Preserved
+- Weather data, providers, fallbacks, caching, controls, pages, and the service helper are unchanged; presentation only.
+- On-device verification is still outstanding (the Q2 Pod 1.8.8 emulator crashes at the boot logo); host renders cover every page × Minimal/Classic/Modern × light/dark via `tests/test_render.c`.
+
 ## v1.3.0 — Independent weather and location fallback providers (2026-11-20)
 
 ### Added

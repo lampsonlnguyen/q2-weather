@@ -198,8 +198,8 @@ int dashboard_input(Dashboard *ui, const char *event) {
         if (y < 42 && x < 85) {
             back(ui);
         } else if (ui->page == 5) {
-            int row = (y - 94) / 60;
-            if (y < 94 || y >= 274 || x < 34 || x >= 341 || row < 0 || row >= 3) return 0;
+            int row = (y - 90) / 64;
+            if (y < 90 || y >= 282 || x < 34 || x >= 341 || row < 0 || row >= 3) return 0;
             int start = (ui->match_selected / 3) * 3;
             int idx = start + row;
             if (idx >= ui->match_count) return 0;
@@ -223,26 +223,29 @@ int dashboard_input(Dashboard *ui, const char *event) {
             ui->keyboard_index = idx;
             keyboard_action(ui);
         } else if (ui->page == 2) {
-            int idx = (y - 76) / 48;
-            if (y < 76 || idx < 0 || idx >= 5) return 0;
+            int idx = (y - 26) / 32;
+            if (y < 26 || idx < 0 || idx >= 5) return 0;
             ui->keyboard_index = idx;
             settings_action(ui);
-        } else if (ui->page == 0 && y < 42 && x >= 267 && x < 344) {
-            ui->home_selected = 2;
-            ui->page = 2;
-            ui->keyboard_index = 0;
-        } else if (ui->page == 0 && y >= 65 && y < 265) {
-            if (y >= 156 && y < 255)
+        } else if (ui->page == 0 && y >= 26 && y < 186) {
+            /* Locations list: two 64 px location rows, then the 32 px
+             * Settings row (dashboard_render.c page 0). */
+            if (y >= 154)
+                ui->home_selected = 2;
+            else if (y >= 90)
                 ui->home_selected = 1;
-            else if (y >= 65 && y < 155)
-                ui->home_selected = 0;
             else
-                return 0;
-            ui->slot = ui->home_selected;
-            open_location(ui);
-        } else if (ui->page == 1 && y >= 209 && y <= 283) {
-            int idx = (x - 31) / 45;
-            if (x < 31 || idx < 0 || idx >= Q2_FORECAST_DAYS) return 0;
+                ui->home_selected = 0;
+            if (ui->home_selected == 2) {
+                ui->page = 2;
+                ui->keyboard_index = 0;
+            } else {
+                ui->slot = ui->home_selected;
+                open_location(ui);
+            }
+        } else if (ui->page == 1 && y >= 90 && y < 314) {
+            int idx = (y - 90) / 32;
+            if (idx < 0 || idx >= Q2_FORECAST_DAYS) return 0;
             ui->day = idx;
             ui->page = 4;
             ui->detailed = 1;
