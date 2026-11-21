@@ -42,8 +42,7 @@ static void keyboard_action(Dashboard *ui) {
 static void open_location(Dashboard *ui) {
     ui->day = 0;
     ui->wheel_rem = 0;
-    if (!ui->weather.locations[ui->slot].used) {
-        ui->city_target = ui->slot;
+    if (ui->slot == 1 && !ui->weather.locations[1].used) {
         ui->page = 3;
         ui->keyboard_index = 0;
     } else {
@@ -73,7 +72,6 @@ static void back(Dashboard *ui) {
 static void settings_action(Dashboard *ui) {
     switch (ui->keyboard_index) {
     case 0:
-        ui->city_target = 1;
         ui->page = 3;
         ui->keyboard_index = 0;
         break;
@@ -86,11 +84,6 @@ static void settings_action(Dashboard *ui) {
     case 3:
         ui->clear_request = 1;
         break;
-    case 4:
-        ui->city_target = 0;
-        ui->page = 3;
-        ui->keyboard_index = 0;
-        break;
     default:
         break;
     }
@@ -100,7 +93,6 @@ void dashboard_init(Dashboard *ui) {
     memset(ui, 0, sizeof *ui);
     ui->redraw = 1;
     ui->wheel_percent = 50;
-    ui->city_target = 1;
 }
 
 int dashboard_input(Dashboard *ui, const char *event) {
@@ -136,7 +128,7 @@ int dashboard_input(Dashboard *ui, const char *event) {
                          &ui->keyboard_index;
         int max = ui->page == 5 ? ui->match_count - 1 :
                   ui->page == 0 ? 2 :
-                  ui->page == 2 ? 4 :
+                  ui->page == 2 ? 3 :
                   ui->page == 3 ? KEY_COUNT - 1 :
                   Q2_FORECAST_DAYS - 1;
         int step = 1400 / (ui->wheel_percent >= 10 ? ui->wheel_percent : 50);
@@ -225,7 +217,7 @@ int dashboard_input(Dashboard *ui, const char *event) {
             keyboard_action(ui);
         } else if (ui->page == 2) {
             int idx = (y - 76) / 48;
-            if (y < 76 || idx < 0 || idx >= 5) return 0;
+            if (y < 76 || idx < 0 || idx >= 4) return 0;
             ui->keyboard_index = idx;
             settings_action(ui);
         } else if (ui->page == 0 && y < 42 && x >= 267 && x < 344) {
