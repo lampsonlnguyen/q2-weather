@@ -56,7 +56,8 @@ int http_get(const char *url, char *body, size_t capacity) {
     void *curl = curl_easy_init();
     if (!curl) return -1;
     curl_easy_setopt(curl, 10002, url); /* CURLOPT_URL */
-    curl_easy_setopt(curl, 10018, "Q2 Weather/0.1"); /* USERAGENT */
+    curl_easy_setopt(curl, 10018,
+                     "Q2Weather/1.2 (+https://github.com/lampsonlnguyen/q2-weather)"); /* USERAGENT */
     curl_easy_setopt(curl, 20011, receive); /* WRITEFUNCTION */
     curl_easy_setopt(curl, 10001, &r); /* WRITEDATA */
     curl_easy_setopt(curl, 78, 10L); /* CONNECTTIMEOUT */
@@ -73,7 +74,9 @@ int http_get(const char *url, char *body, size_t capacity) {
     if (!result) (void)curl_easy_getinfo(curl, 0x200002, &status);
     int ok = result == 0 && status == 200 && r.used;
     if (!ok) {
-        const char *endpoint = strstr(url, "api.open-meteo.com")
+        const char *endpoint = strstr(url, "api.met.no") ? "met.no forecast" :
+                               strstr(url, "ipapi.co") ? "ipapi.co location" :
+                               strstr(url, "api.open-meteo.com")
                                    ? "open-meteo forecast"
                                    : strstr(url, "geocoding-api.open-meteo.com")
                                          ? "open-meteo geocoding"
@@ -171,14 +174,27 @@ static int date_array(const char *json, char dates[][11], int count) {
     return 0;
 }
 
+/* IP location is optional. Provider failures cannot block forecasts for
+ * already configured cities. A second independent provider is attempted. */
 int weather_geolocate(char *city, size_t cap, double *lat, double *lon) {
+    static const char *providers[] = {
+        "https://ipwho.is/", "https://ipapi.co/json/"
+    };
     char body[8192];
-    if (http_get("https://ipwho.is/", body, sizeof body) ||
-        strstr(body, "\"success\":false") ||
-        value_string(body, "city", city, cap) ||
-        value_number(body, "latitude", lat) || value_number(body, "longitude", lon))
-        return -1;
-    return *lat >= -90 && *lat <= 90 && *lon >= -180 && *lon <= 180 ? 0 : -1;
+    if (!city || cap < 2 || !lat || !lon) return -1;
+    for (size_t i = 0; i < 2; ++i) {
+        city[0] = 0;
+        if (http_get(providers[i], body, sizeof body)) continue;
+        if (strstr(body, "\"success\":false") ||
+            value_string(body, "city", city, cap) ||
+            value_number(body, "latitude", lat) ||
+            value_number(body, "longitude", lon) ||
+            *lat < -90 || *lat > 90 || *lon < -180 || *lon > 180)
+            continue;
+        return 0;
+    }
+    weather_log("GEO", "Both IP location providers unavailable; choose Home City");
+    return -1;
 }
 
 static int encode(const char *input, char *output, size_t capacity) {
