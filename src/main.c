@@ -21,6 +21,7 @@
 #define SOCKET_PATH "/tmp/q2-weather.browse.sock"
 #define STATE_PATH "/mnt/mmc/.weather/state"
 #define STATE_TEMP "/mnt/mmc/.weather/state.tmp"
+#define MANUAL_HOME_PATH "/mnt/mmc/.weather/manual-home"
 #define WIRE_MAX 8192
 #define ROW_MAX 32768
 
@@ -132,6 +133,19 @@ static void save_state(void) {
     if (!ok || rename(STATE_TEMP, STATE_PATH)) unlink(STATE_TEMP);
 }
 
+/* Manual Home remains selected across refreshes and restarts. */
+static int manual_home_enabled(void) {
+    return access(MANUAL_HOME_PATH, F_OK) == 0;
+}
+
+static int enable_manual_home(void) {
+    FILE *f = fopen(MANUAL_HOME_PATH, "wb");
+    if (!f) return -1;
+    int ok = fputc('1', f) != EOF;
+    if (fclose(f)) ok = 0;
+    return ok ? 0 : -1;
+}
+
 static int wifi_preference_on(void) {
     FILE *f = fopen("/mnt/data/config.ini", "rb");
     if (!f) return 1;
@@ -159,14 +173,11 @@ static int wifi_power(void *unused, int enable) {
     return -1;
 }
 
+/* A failed IP location API must never block saved-city weather requests. */
 static int wait_online(void *unused, int timeout_seconds) {
     (void)unused;
-    for (int i = 0; i < timeout_seconds && !stopped; i += 2) {
-        char body[4096];
-        if (!http_get("https://ipwho.is/", body, sizeof body)) return 0;
-        sleep(2);
-    }
-    return -1;
+    (void)timeout_seconds;
+    return stopped ? -1 : 0;
 }
 
 static int detect(void *unused, char *name, size_t cap, double *lat, double *lon) {
@@ -226,7 +237,7 @@ static void *refresh_worker(void *unused) {
         WeatherApp snapshot = rt.app;
         int generation = rt.generation;
         pthread_mutex_unlock(&state_mutex);
-        int error = weather_on_open(&snapshot, &backend);
+        int error = weather_refresh(&snapshot, &backend, !manual_home_enabled());
         pthread_mutex_lock(&state_mutex);
         if (generation == rt.generation) {
             rt.app = snapshot;
@@ -322,7 +333,7 @@ static void page_location(Reply *r, int slot) {
     }
     if (!loc->used) {
         info(r, slot ? "No saved city" : "Current city unavailable",
-             slot ? "Choose a city below" : "Refresh to detect your city");
+             slot ? "Choose a city below" : "Choose Home City in Settings");
     } else {
         if (loc->valid) {
             display_number(temp, sizeof temp, loc->temperature_c);
@@ -457,11 +468,17 @@ static void handle(char **args, int count, Reply *r) {
         page_cities(r);
     } else if (!strcmp(operation, "savecity")) {
         double lat, lon;
+        int slot = 1;
         char city[Q2_WEATHER_NAME] = {0};
         int found = 0;
         pthread_mutex_lock(&state_mutex);
+        int fields = sscanf(arg, "%d %lf %lf", &slot, &lat, &lon);
+        if (fields != 3) {
+            slot = 1; /* Older client versions sent latitude/longitude only. */
+            fields = sscanf(arg, "%lf %lf", &lat, &lon) == 2 ? 3 : 0;
+        }
         if (!rt.search_pending && rt.search_count > 0 &&
-            sscanf(arg, "%lf %lf", &lat, &lon) == 2) {
+            fields == 3 && (slot == 0 || slot == 1)) {
             for (int i = 0; i < rt.search_count; ++i) {
                 WeatherGeoResult *item = &rt.search_matches[i];
                 if (fabs(lat - item->latitude) < 0.000001 &&
@@ -485,7 +502,9 @@ static void handle(char **args, int count, Reply *r) {
             snprintf(r->message, sizeof r->message, "Please search again");
         } else {
             pthread_mutex_lock(&state_mutex);
-            int good = weather_set_location(&rt.app, 1, city, lat, lon) == WEATHER_OK;
+            int good = 1;
+            if (slot == 0 && enable_manual_home()) good = 0;
+            if (good) good = weather_set_location(&rt.app, slot, city, lat, lon) == WEATHER_OK;
             if (good) {
                 rt.generation++;
                 save_state();
@@ -493,7 +512,8 @@ static void handle(char **args, int count, Reply *r) {
             pthread_mutex_unlock(&state_mutex);
             if (good) {
                 refresh();
-                snprintf(r->message, sizeof r->message, "Saved city; updating weather");
+                snprintf(r->message, sizeof r->message,
+                         slot ? "Saved city; updating weather" : "Home city; updating weather");
             } else {
                 snprintf(r->status, sizeof r->status, "error");
                 snprintf(r->message, sizeof r->message, "Invalid city");
