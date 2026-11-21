@@ -21,8 +21,6 @@
 #define SOCKET_PATH "/tmp/q2-weather.browse.sock"
 #define STATE_PATH "/mnt/mmc/.weather/state"
 #define STATE_TEMP "/mnt/mmc/.weather/state.tmp"
-#define MANUAL_HOME_PATH "/mnt/mmc/.weather/manual-home"
-#define STATUS_PATH "/mnt/mmc/.weather/network-status"
 #define WIRE_MAX 8192
 #define ROW_MAX 32768
 
@@ -37,8 +35,6 @@ typedef struct {
     int search_count;
     int search_pending, search_found, search_generation;
     int generation, rerun;
-    time_t last_attempt;
-    int ever_refreshed;
 } Runtime;
 
 typedef struct {
@@ -136,20 +132,6 @@ static void save_state(void) {
     if (!ok || rename(STATE_TEMP, STATE_PATH)) unlink(STATE_TEMP);
 }
 
-/* A manually selected Home location must survive restarts and must not be
- * overwritten by subsequent approximate IP geolocation requests. */
-static int manual_home_enabled(void) {
-    return access(MANUAL_HOME_PATH, F_OK) == 0;
-}
-
-static int enable_manual_home(void) {
-    FILE *file = fopen(MANUAL_HOME_PATH, "wb");
-    if (!file) return -1;
-    int ok = fputc('1', file) != EOF;
-    if (fclose(file)) ok = 0;
-    return ok ? 0 : -1;
-}
-
 static int wifi_preference_on(void) {
     FILE *f = fopen("/mnt/data/config.ini", "rb");
     if (!f) return 1;
@@ -177,13 +159,14 @@ static int wifi_power(void *unused, int enable) {
     return -1;
 }
 
-/* Do not use the IP geolocation provider as a network preflight.
- * It can fail independently of Open-Meteo and must not prevent a saved
- * location from receiving a forecast. Each request checks connectivity. */
 static int wait_online(void *unused, int timeout_seconds) {
     (void)unused;
-    (void)timeout_seconds;
-    return stopped ? -1 : 0;
+    for (int i = 0; i < timeout_seconds && !stopped; i += 2) {
+        char body[4096];
+        if (!http_get("https://ipwho.is/", body, sizeof body)) return 0;
+        sleep(2);
+    }
+    return -1;
 }
 
 static int detect(void *unused, char *name, size_t cap, double *lat, double *lon) {
@@ -236,30 +219,6 @@ static const WeatherBackend backend = {
 };
 
 /* Network calls run outside the Library browser's 15-second request timeout. */
-static void save_network_status(int error) {
-    const char *message = "";
-    if (error != WEATHER_OK) {
-        const char *http_error = weather_http_error();
-        if (strstr(http_error, "DNS unavailable"))
-            message = "DNS unavailable - retrying";
-        else if (strstr(http_error, "Connection timed out"))
-            message = "Connection timed out - retrying";
-        else if (strstr(http_error, "TLS certificate error"))
-            message = "Secure connection failed";
-        else if (error == WEATHER_GEO)
-            message = "Location unavailable - set Home City";
-        else if (error == WEATHER_RADIO)
-            message = "Wi-Fi disabled";
-        else
-            message = "Weather update failed - retrying";
-    }
-    FILE *file = fopen(STATUS_PATH, "wb");
-    if (!file) return;
-    (void)fprintf(file, "%s\n", message);
-    (void)fclose(file);
-}
-
-/* Network refresh happens on a worker, never the rendering thread. */
 static void *refresh_worker(void *unused) {
     (void)unused;
     for (;;) {
@@ -267,14 +226,11 @@ static void *refresh_worker(void *unused) {
         WeatherApp snapshot = rt.app;
         int generation = rt.generation;
         pthread_mutex_unlock(&state_mutex);
-        int error = weather_refresh(&snapshot, &backend, !manual_home_enabled());
+        int error = weather_on_open(&snapshot, &backend);
         pthread_mutex_lock(&state_mutex);
         if (generation == rt.generation) {
             rt.app = snapshot;
             rt.error = error;
-            save_network_status(error);
-            rt.last_attempt = time(NULL);
-            if (error == WEATHER_OK) rt.ever_refreshed = 1;
             save_state();
         } else {
             rt.rerun = 1;
@@ -296,7 +252,6 @@ static void refresh(void) {
         return;
     }
     rt.pending = 1;
-    rt.last_attempt = time(NULL);
     pthread_mutex_unlock(&state_mutex);
     pthread_t thread;
     if (pthread_create(&thread, NULL, refresh_worker, NULL)) {
@@ -367,7 +322,7 @@ static void page_location(Reply *r, int slot) {
     }
     if (!loc->used) {
         info(r, slot ? "No saved city" : "Current city unavailable",
-             slot ? "Choose a city below" : "Set Home City in Settings");
+             slot ? "Choose a city below" : "Refresh to detect your city");
     } else {
         if (loc->valid) {
             display_number(temp, sizeof temp, loc->temperature_c);
@@ -502,18 +457,11 @@ static void handle(char **args, int count, Reply *r) {
         page_cities(r);
     } else if (!strcmp(operation, "savecity")) {
         double lat, lon;
-        int slot = 1;
         char city[Q2_WEATHER_NAME] = {0};
         int found = 0;
         pthread_mutex_lock(&state_mutex);
-        int fields = sscanf(arg, "%d %lf %lf", &slot, &lat, &lon);
-        /* Old clients passed only the coordinates: retain compatibility. */
-        if (fields != 3) {
-            slot = 1;
-            fields = sscanf(arg, "%lf %lf", &lat, &lon) == 2 ? 3 : 0;
-        }
         if (!rt.search_pending && rt.search_count > 0 &&
-            fields == 3 && (slot == 0 || slot == 1)) {
+            sscanf(arg, "%lf %lf", &lat, &lon) == 2) {
             for (int i = 0; i < rt.search_count; ++i) {
                 WeatherGeoResult *item = &rt.search_matches[i];
                 if (fabs(lat - item->latitude) < 0.000001 &&
@@ -537,9 +485,7 @@ static void handle(char **args, int count, Reply *r) {
             snprintf(r->message, sizeof r->message, "Please search again");
         } else {
             pthread_mutex_lock(&state_mutex);
-            int good = 1;
-            if (slot == 0 && enable_manual_home()) good = 0;
-            if (good) good = weather_set_location(&rt.app, slot, city, lat, lon) == WEATHER_OK;
+            int good = weather_set_location(&rt.app, 1, city, lat, lon) == WEATHER_OK;
             if (good) {
                 rt.generation++;
                 save_state();
@@ -547,8 +493,7 @@ static void handle(char **args, int count, Reply *r) {
             pthread_mutex_unlock(&state_mutex);
             if (good) {
                 refresh();
-                snprintf(r->message, sizeof r->message,
-                         slot ? "Saved city; updating weather" : "Home city; updating weather");
+                snprintf(r->message, sizeof r->message, "Saved city; updating weather");
             } else {
                 snprintf(r->status, sizeof r->status, "error");
                 snprintf(r->message, sizeof r->message, "Invalid city");
@@ -629,9 +574,7 @@ int main(void) {
     signal(SIGTERM, stop_server);
     signal(SIGPIPE, SIG_IGN);
     weather_init(&rt.app);
-    weather_log("SERVICE", "Weather worker starting");
-    if (load_state())
-        weather_log("SERVICE", "No valid cached weather state");
+    load_state();
     weather_art_init();
     struct sockaddr_un addr = {0};
     addr.sun_family = AF_UNIX;
@@ -640,27 +583,14 @@ int main(void) {
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0 || bind(fd, (struct sockaddr *)&addr, sizeof addr) ||
         listen(fd, 4)) {
-        weather_log("SERVICE", "Unable to open weather command socket");
         if (fd >= 0) close(fd);
         return 1;
     }
-    weather_log("SERVICE", "Weather worker ready");
     /* Let Q2 Pod finish launching before network access; Smart Wi-Fi sees
      * this app as running and wakes the radio on its next poll. */
     refresh();
     time_t last = time(NULL);
     while (!stopped && time(NULL) - last < 600) {
-        /* Recover automatically after the Q2 reconnects. Poll infrequently
-         * and never overlap active requests or bypass manual Wi-Fi Off. */
-        time_t now = time(NULL);
-        pthread_mutex_lock(&state_mutex);
-        int pending = rt.pending;
-        int failed = rt.error != WEATHER_OK || !rt.ever_refreshed;
-        time_t elapsed = now - rt.last_attempt;
-        pthread_mutex_unlock(&state_mutex);
-        if (!pending && wifi_preference_on() &&
-            elapsed >= (failed ? 60 : 900))
-            refresh();
         struct pollfd p = {fd, POLLIN, 0};
         if (poll(&p, 1, 1000) > 0) {
             int accepted = accept(fd, NULL, NULL);
