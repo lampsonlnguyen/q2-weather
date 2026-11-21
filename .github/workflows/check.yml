@@ -36,16 +36,15 @@ jobs:
         run: |
           sh tools/sysroot.sh
           make
-          test "$(find assets/sprites -maxdepth 1 -name '*.png' | wc -l)" -eq 15
-          ! grep -q 'weather_glyph' src/dashboard_render.c
           unzip -t dist/q2-weather.zip
           unzip -l dist/q2-weather.zip | grep '.weather/icon.png'
-          unzip -p dist/q2-weather.zip .weather/q2app | grep -Fx 'game=1'
+          test "$(unzip -Z1 dist/q2-weather.zip | grep -c '^.weather/icons/.*\.jpg$')" -eq 11
           unzip -p dist/q2-weather.zip .weather/q2app | grep -Fx 'row=library'
+          ! unzip -p dist/q2-weather.zip .weather/q2app | grep -q '^game='
           test "$(unzip -Z1 dist/q2-weather.zip | grep -c '/q2app$')" -eq 1
-          ! unzip -Z1 dist/q2-weather.zip | grep -q '^.weather-view/'
+          unzip -Z1 dist/q2-weather.zip | grep -Fx '.weather/run'
+          ! unzip -Z1 dist/q2-weather.zip | grep -q 'q2-weather-service'
           file dist/.weather/q2-weather | grep -E 'ELF 32-bit LSB.*MIPS'
-          file dist/.weather/q2-weather-service | grep -E 'ELF 32-bit LSB.*MIPS'
       - uses: actions/upload-artifact@v4
         with:
           name: q2-weather-card-app

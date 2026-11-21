@@ -10,16 +10,17 @@ Q2_LDFLAGS = -m elf32ltsmip -e __start --dynamic-linker /lib/ld-linux-mipsn8.so.
 	--image-base=0x400000 -z noexecstack --hash-style=sysv --build-id=none -s
 Q2_SRC = src/main.c src/http.c src/weather.c src/art.c src/crt-q2.c
 Q2_OBJ = $(patsubst src/%.c,build/q2/%.o,$(Q2_SRC))
-DASH_SRC = src/dashboard.c src/dashboard_render.c src/dashboard_q2.c src/theme.c src/lang.c src/art.c src/weather.c src/q2pod_scheme.c src/crt-q2.c
-DASH_OBJ = $(patsubst src/%.c,build/dashboard/%.o,$(DASH_SRC))
 DIST = dist/.weather
-LANG_PACKS = $(wildcard assets/lang/*.lang)
-DIST_LANG_PACKS = $(patsubst assets/lang/%.lang,$(DIST)/lang/%.lang,$(LANG_PACKS))
+# The condition covers are drawn at build time (tools/draw_icons.py, Pillow).
+ICON_NAMES = cloudy drizzle fog overcast partly rain showers snow snowshowers sunny thunder
+DIST_ICONS = $(patsubst %,$(DIST)/icons/%.jpg,$(ICON_NAMES))
 
 # The Q2 glibc runtime places libcurl in /usr/lib; copied sysroots may
 # instead have it in /lib or omit it entirely. Extract it when needed.
 Q2_CURL = $(SYSROOT)/lib/libcurl.so.4
 Q2_ROOTFS ?= build/q2-rootfs.squashfs
+# The host build declares the curl calls it makes itself, so any libcurl.so links.
+HOST_CURL ?= -lcurl
 
 all: dist/q2-weather.zip
 
@@ -31,48 +32,40 @@ build/q2/%.o: src/%.c src/weather.h src/http.h | $(SYSROOT)/usr/include/errno.h
 	mkdir -p $(@D)
 	$(Q2_CC) $(Q2_FLAGS) $(Q2_CFLAGS) -c $< -o $@
 
-build/weather_fonts.inc: tools/pack_fonts.py assets/icon.png
-	python3 tools/pack_fonts.py
-
-build/icons/icon.png: build/weather_fonts.inc
-	@test -f $@
-
-build/dashboard/dashboard_render.o: build/weather_fonts.inc
-build/dashboard/q2pod_scheme.o: src/q2pod_scheme.h
-build/dashboard/%.o: src/%.c src/dashboard.h src/weather.h src/art.h src/q2pod_scheme.h | $(SYSROOT)/usr/include/errno.h
-	mkdir -p $(@D)
-	$(Q2_CC) $(Q2_FLAGS) $(Q2_CFLAGS) -Ibuild -c $< -o $@
-
 $(Q2_CURL):
 	sh tools/repair-libcurl.sh "$(SYSROOT)" "$(Q2_ROOTFS)"
 
-$(DIST)/q2-weather-service: $(Q2_OBJ) $(Q2_CURL)
+$(DIST)/q2-weather: $(Q2_OBJ) $(Q2_CURL)
 	mkdir -p $(@D)
 	$(Q2_LD) $(Q2_LDFLAGS) -o $@ $(Q2_OBJ) $(SYSROOT)/lib/libc.so.6 \
 		$(SYSROOT)/lib/libm.so.6 $(SYSROOT)/lib/libpthread.so.0 \
 		$(SYSROOT)/lib/libgcc_s.so.1 $(Q2_CURL) \
 		$(SYSROOT)/lib/ld-linux-mipsn8.so.1
 
-$(DIST)/q2-weather: $(DASH_OBJ)
-	mkdir -p $(@D)
-	$(Q2_LD) $(Q2_LDFLAGS) -o $@ $^ $(SYSROOT)/lib/libc.so.6 \
-		$(SYSROOT)/lib/libm.so.6 $(SYSROOT)/lib/libpthread.so.0 \
-		$(SYSROOT)/lib/libgcc_s.so.1 $(SYSROOT)/lib/ld-linux-mipsn8.so.1
-
 $(DIST)/q2app: q2app
 	mkdir -p $(@D)
 	cp $< $@
 
-$(DIST)/lang/%.lang: assets/lang/%.lang
+$(DIST)/run: run
+	mkdir -p $(@D)
+	cp $< $@
+	chmod 755 $@
+
+$(DIST)/icon.png: assets/icon.png
 	mkdir -p $(@D)
 	cp $< $@
 
-$(DIST)/icon.png: build/icons/icon.png
-	mkdir -p $(@D)
-	cp $< $@
+build/icons/.stamp: tools/draw_icons.py
+	python3 tools/draw_icons.py build/icons
+	touch $@
 
-dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/q2-weather-service $(DIST)/q2app $(DIST)/icon.png $(DIST_LANG_PACKS)
-	cd dist && zip -qX q2-weather.zip .weather/q2-weather .weather/q2-weather-service .weather/q2app .weather/icon.png .weather/lang/*.lang
+$(DIST)/icons/%.jpg: build/icons/.stamp
+	mkdir -p $(@D)
+	cp build/icons/$*.jpg $@
+
+dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/run $(DIST)/q2app $(DIST)/icon.png $(DIST_ICONS)
+	cd dist && rm -f q2-weather.zip && zip -qX q2-weather.zip .weather/q2-weather .weather/run \
+		.weather/q2app .weather/icon.png .weather/icons/*.jpg
 
 build/test_weather: src/weather.c src/weather.h tests/test_weather.c
 	mkdir -p build
@@ -81,7 +74,7 @@ build/test_weather: src/weather.c src/weather.h tests/test_weather.c
 build/host/q2-weather: src/main.c src/http.c src/weather.c src/art.c src/weather.h src/http.h src/art.h
 	mkdir -p build/host
 	$(CC) -std=gnu11 -DHOST -O2 -Wall -Wextra -Werror -o $@ \
-		src/main.c src/http.c src/weather.c src/art.c -lcurl -lm
+		src/main.c src/http.c src/weather.c src/art.c $(HOST_CURL) -lm -lpthread
 
 build/test_http: src/http.c src/http.h tests/test_http.c
 	mkdir -p build
@@ -91,38 +84,17 @@ build/test_art: src/art.c src/art.h tests/test_art.c
 	mkdir -p build
 	$(CC) -std=gnu11 -DHOST -O2 -Wall -Wextra -Werror -o $@ src/art.c tests/test_art.c
 
-build/test_theme: tests/test_theme.c src/theme.c src/theme.h
-	mkdir -p build
-	$(CC) $(CFLAGS) -o $@ tests/test_theme.c src/theme.c
-
-build/test_scheme: tests/test_scheme.c src/q2pod_scheme.c src/q2pod_scheme.h
-	mkdir -p build
-	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -o $@ tests/test_scheme.c src/q2pod_scheme.c -lm
-
-build/test_render: tests/test_render.c src/dashboard.c src/dashboard_render.c src/q2pod_scheme.c src/lang.c src/dashboard.h src/weather.h src/q2pod_scheme.h build/weather_fonts.inc
-	mkdir -p build/renders
-	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Ibuild -o $@ tests/test_render.c src/dashboard.c src/dashboard_render.c src/q2pod_scheme.c src/lang.c -lm
-
-build/test_lang: tests/test_lang.c src/lang.c src/lang.h
-	mkdir -p build
-	$(CC) $(CFLAGS) -o $@ tests/test_lang.c src/lang.c
-
-build/test_dashboard: tests/test_dashboard.c src/dashboard.c src/dashboard.h src/weather.h
-	mkdir -p build
-	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -o $@ tests/test_dashboard.c src/dashboard.c
-
 host: build/host/q2-weather
 
-check: build/test_weather build/test_http build/test_art build/test_theme build/test_scheme build/test_lang build/test_dashboard build/test_render build/host/q2-weather
+check: build/test_weather build/test_http build/test_art build/host/q2-weather
+	sh -n run
 	./build/test_weather
 	./build/test_http
 	./build/test_art
-	./build/test_theme
-	./build/test_scheme
-	./build/test_lang
-	./build/test_dashboard
-	./build/test_render
-	@echo 'Single-app UI + network worker checks passed'
+	python3 -I tests/test_pages.py build/host/q2-weather
+	@echo 'Weather card app checks passed'
+
+icons: build/icons/.stamp
 
 format:
 	clang-format -i src/*.c src/*.h tests/*.c
@@ -132,9 +104,9 @@ format-check:
 
 clean:
 	# Preserve build/sysroot and build/q2-rootfs.squashfs: these are expensive to recreate.
-	rm -rf build/q2 build/dashboard build/host build/weather_fonts.inc build/icons build/test_weather build/test_http build/test_art build/test_theme build/test_scheme build/test_lang build/test_dashboard build/test_render dist
+	rm -rf build/q2 build/host build/icons build/test_weather build/test_http build/test_art dist
 
 clean-all:
 	rm -rf build dist
 
-.PHONY: all check format format-check clean clean-all host
+.PHONY: all check format format-check clean clean-all host icons

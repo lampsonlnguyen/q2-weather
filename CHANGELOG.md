@@ -1,16 +1,22 @@
 # Changelog
 
-## Unreleased — q2-pod theme look
+## Unreleased: a Q2 Pod card app
 
 ### Changed
-- **q2-pod theme inheritance:** Every screen is now a q2-pod list — 26 px status bar, 32 px rows, the active theme's own selection painter (Minimal's card, Classic's gloss stops, Modern's accent bar), chevron on the selected row, settings values right-aligned. Scheme values are ported from q2-pod itself (`src/q2pod_scheme.c`: `ACCENTS` tones from `patch/offsets.inc`, Classic Blue's band and gloss bar from `assets/themes/classic-light/theme.xml`, the HSV gloss derivation from `tools/theme.py`), resolved from the already-parsed theme/accent/Light Mode, so the app keeps following live theme changes.
-- **Text-only conditions:** All condition sprites are deleted — `assets/sprites/`, `tools/pack_sprites.py`, `tools/draw_weather_icons.py`, and the sprite atlas. Conditions are text with temperature/high/low/precipitation. The forecast is seven list rows instead of 45 px icon columns; the day detail is a list page; the keyboard keeps its QWERTY layout and behavior with theme selection and a **DEL** text key instead of the pixel-drawn backspace arrow.
-- **Fonts:** The build-time glyph rasterizer stays (font engine, not graphics) and is now packed by `tools/pack_fonts.py` into `build/weather_fonts.inc`. The launcher `assets/icon.png` is unchanged and is still the app's only image.
-- q2-pod's native art rows are unaffected: `src/art.c` still publishes JPEGs from `.weather/icons/` for the firmware's art rows.
+- **Drawn by Q2 Pod:** Weather is now a card app, as Mixtape is: `q2app` without `game=1`, a `run` launcher, and one program, `q2-weather`, that answers Q2 Pod's pages (Q2SPOT/1). Q2 Pod draws every page itself, so the fonts, rows, selection, title bar, scrolling, click wheel, touch and theme (Minimal, Classic, Modern, every accent, Light Mode) are the firmware's own rather than a copy of them. Its row stays in Library → Apps.
+- **Pages:** the first page lists My Location (or Home City) and the Saved City with their temperature and condition, then Settings; a place's page shows now, today's high and low and humidity, then seven days with condition, high / low and chance of rain, then when it was updated. Settings holds Temperature, Home City, Saved City, Remove Saved City and Update Now.
+- **City search** uses Q2 Pod's own search box: the title bar's magnifying glass finds a Saved City, and Settings' Home City and Saved City rows open a **City name:** box. The built-in QWERTY keyboard is gone.
+- **Condition pictures:** each place and day row has a 64 px condition picture beside it, shown as Q2 Pod shows an album's cover (original drawings, drawn at build time by `tools/draw_icons.py`). They're written whole and renamed into place, and only when the condition changes.
+- Overcast (code 3) reads **Overcast** and code 1 **Mostly clear**, rather than both as Partly cloudy.
+- Temperatures show as `22°`. The units choice is kept in `.weather/units`, as before.
+- A first update that finds no network (the Apps row opens before Smart Wi-Fi's link) is tried again up to three times, 10 s apart.
 
-### Preserved
-- Weather data, providers, fallbacks, caching, controls, pages, and the service helper are unchanged; presentation only.
-- On-device verification is still outstanding (the Q2 Pod 1.8.8 emulator crashes at the boot logo); host renders cover every page × Minimal/Classic/Modern × light/dark via `tests/test_render.c`.
+### Removed
+- The full-screen dashboard (`src/dashboard*.c`, `src/q2pod_scheme.c`, `src/theme.c`, `src/lang.c`), its built-in fonts and the `lang/` packs, and `q2-weather-service` as a separate file.
+
+### Checks
+- `tests/test_pages.py` runs the host build on a cached forecast and checks the rows of every page; `make check` runs it.
+- On-device verification is still to do.
 
 ## v1.3.0 — Independent weather and location fallback providers (2026-11-20)
 

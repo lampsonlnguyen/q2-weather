@@ -9,7 +9,7 @@ int main(void) {
     assert(!strcmp(weather_art_icon(0), "sunny"));
     assert(!strcmp(weather_art_icon(1), "partly"));
     assert(!strcmp(weather_art_icon(2), "partly"));
-    assert(!strcmp(weather_art_icon(3), "cloudy"));
+    assert(!strcmp(weather_art_icon(3), "overcast"));
     assert(!strcmp(weather_art_icon(45), "fog"));
     assert(!strcmp(weather_art_icon(51), "drizzle"));
     assert(!strcmp(weather_art_icon(63), "rain"));
@@ -17,7 +17,9 @@ int main(void) {
     assert(!strcmp(weather_art_icon(71), "snow"));
     assert(!strcmp(weather_art_icon(85), "snowshowers"));
     assert(!strcmp(weather_art_icon(95), "thunder"));
-    assert(!strcmp(weather_art_icon(-1), "overcast"));
+    assert(!strcmp(weather_art_icon(-1), "cloudy"));
+    assert(!strcmp(weather_condition(1), "Mostly clear"));
+    assert(!strcmp(weather_condition(3), "Overcast"));
     assert(weather_art_key("location", "0") != weather_art_key("location", "1"));
     assert(weather_art_key("forecast", "0-0") != weather_art_key("forecast", "0-1"));
     assert(weather_art_key("", "") == 0x0c0c6824u);

@@ -1,0 +1,34 @@
+#!/bin/sh
+# Installed as /mnt/mmc/.weather/run. Q2 Pod runs it when Weather's page opens (a card app,
+# q2-pod's patch/addon.c). It runs from /tmp, never the card: the app and this launcher are copied
+# there first and the card's copy of this script is left at once (exec), so nothing keeps the card
+# busy and USB storage can always take it. The loop restarts the app after a failure, waiting 5 s
+# and doubling to a minute; an exit of 0 (the app's own, after ten idle minutes) ends it. Q2 Pod
+# stops it with a TERM to the loop's pid in /tmp/q2-weather.
+pid=/tmp/q2-weather
+if [ "$1" != --loop ]; then
+    [ -f $pid ] && kill -0 "$(cat $pid)" 2>/dev/null && exit 0
+    dir=$(cd "$(dirname "$0")" && pwd)
+    cp -f "$dir/q2-weather" /tmp/q2-weather.bin && chmod 755 /tmp/q2-weather.bin || exit 1
+    cp -f "$0" /tmp/q2-weather.run || exit 1
+    cd /tmp
+    exec /bin/sh /tmp/q2-weather.run --loop
+fi
+(
+    echo 1000 > /proc/self/oom_score_adj # the app goes before Q2 Pod's demo
+    child=
+    trap '[ -n "$child" ] && kill -TERM $child 2>/dev/null && wait $child; rm -f $pid /tmp/q2-weather.bin /tmp/q2-weather.run; exit 0' TERM INT
+    delay=5
+    while :; do
+        nice -n 10 /tmp/q2-weather.bin &
+        child=$!
+        wait $child
+        code=$?
+        [ $code = 0 ] && break
+        sleep $delay &
+        wait $! # a TERM ends the wait at once
+        [ $delay -lt 60 ] && delay=$((delay * 2))
+    done
+    rm -f $pid /tmp/q2-weather.bin /tmp/q2-weather.run
+) </dev/null >/dev/null 2>&1 &
+echo $! > $pid
