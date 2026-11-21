@@ -280,7 +280,8 @@ int weather_geocode(const char *query, char *city, size_t cap, double *lat, doub
     return 0;
 }
 
-int weather_request(double lat, double lon, int *temp, int *humidity, int *code, long *updated,
+static int weather_open_meteo_request(double lat, double lon, int *temp, int *humidity,
+                                      int *code, long *updated,
                     char dates[][11], int highs[], int lows[], int precip[], int codes[],
                     int day_count) {
     if (day_count != 7 || lat < -90 || lat > 90 || lon < -180 || lon > 180) return -1;
@@ -321,6 +322,115 @@ int weather_request(double lat, double lon, int *temp, int *humidity, int *code,
         for (int i = 0; i < day_count; i++) precip[i] = -1;
     }
     return 0;
+}
+
+
+/* MET Norway Locationforecast 2.0: independently hosted global forecast.
+ * Daily values are aggregated from hourly/6-hourly UTC samples because this
+ * API supplies a point time series rather than Open-Meteo-style daily arrays.
+ * Missing precipitation probability remains -1; never invent a percentage. */
+static int met_symbol_code(const char *symbol) {
+    if (strstr(symbol, "thunder")) return 95;
+    if (strstr(symbol, "snow")) return 71;
+    if (strstr(symbol, "sleet")) return 67;
+    if (strstr(symbol, "rain")) return 61;
+    if (strstr(symbol, "fog")) return 45;
+    if (strstr(symbol, "cloudy")) return strstr(symbol, "partly") ? 2 : 3;
+    if (strstr(symbol, "fair")) return 1;
+    if (strstr(symbol, "clearsky")) return 0;
+    return 3;
+}
+
+static int weather_met_request(double lat, double lon, int *temp, int *humidity,
+                               int *code, long *updated, char dates[][11],
+                               int highs[], int lows[], int precip[],
+                               int codes[], int count) {
+    /* The compact JSON commonly occupies tens of KB. Keep headroom without
+     * allocating large persistent data structures on this embedded player. */
+    char url[256];
+    static char body[196608];
+    snprintf(url, sizeof url,
+             "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=%.4f&lon=%.4f",
+             lat, lon);
+    if (http_get(url, body, sizeof body)) return -1;
+    const char *start = key_at(body, "timeseries");
+    if (!start || *start != '[') return -1;
+    for (int i = 0; i < count; ++i) {
+        dates[i][0] = 0;
+        highs[i] = -200;
+        lows[i] = 200;
+        precip[i] = -1;
+        codes[i] = 3;
+    }
+    int day_count = 0, first = 1;
+    const char *p = start + 1;
+    while ((p = strstr(p, "\"time\"")) && day_count <= count) {
+        const char *next = strstr(p + 6, "\"time\"");
+        const char *end = next ? next : p + strlen(p);
+        size_t length = (size_t)(end - p);
+        if (length > 4095) length = 4095;
+        char item[4096];
+        memcpy(item, p, length);
+        item[length] = 0;
+        char iso[40], symbol[96];
+        double t, h, clouds;
+        if (value_string(item, "time", iso, sizeof iso) ||
+            strlen(iso) < 10 ||
+            value_number(item, "air_temperature", &t)) {
+            if (!next) break;
+            p = next;
+            continue;
+        }
+        if (first) {
+            if (value_number(item, "relative_humidity", &h)) h = 0;
+            if (value_number(item, "cloud_area_fraction", &clouds)) clouds = 100;
+            *temp = (int)lround(t);
+            *humidity = (int)lround(h);
+            *code = clouds < 10 ? 0 : clouds < 60 ? 2 : 3;
+            if (!value_string(item, "symbol_code", symbol, sizeof symbol))
+                *code = met_symbol_code(symbol);
+            *updated = (long)time(NULL);
+            first = 0;
+        }
+        int day = -1;
+        for (int i = 0; i < day_count; ++i)
+            if (!strncmp(dates[i], iso, 10)) { day = i; break; }
+        if (day < 0) {
+            if (day_count == count) break;
+            day = day_count++;
+            memcpy(dates[day], iso, 10);
+            dates[day][10] = 0;
+        }
+        int rounded = (int)lround(t);
+        if (rounded > highs[day]) highs[day] = rounded;
+        if (rounded < lows[day]) lows[day] = rounded;
+        double probability;
+        if (!value_number(item, "probability_of_precipitation", &probability) &&
+            probability >= 0 && probability <= 100) {
+            int chance = (int)lround(probability);
+            if (chance > precip[day]) precip[day] = chance;
+        }
+        if (!value_string(item, "symbol_code", symbol, sizeof symbol))
+            codes[day] = met_symbol_code(symbol);
+        if (!next) break;
+        p = next;
+    }
+    if (first) return -1;
+    if (day_count < count) return 1; /* Keep current data if daily series is short. */
+    weather_log("FORECAST", "Open-Meteo unavailable; using MET Norway UTC forecast");
+    return 0;
+}
+
+int weather_request(double lat, double lon, int *temp, int *humidity, int *code, long *updated,
+                    char dates[][11], int highs[], int lows[], int precip[], int codes[],
+                    int day_count) {
+    if (day_count != 7 || !isfinite(lat) || !isfinite(lon) ||
+        lat < -90 || lat > 90 || lon < -180 || lon > 180) return -1;
+    int result = weather_open_meteo_request(lat, lon, temp, humidity, code, updated,
+                                            dates, highs, lows, precip, codes, day_count);
+    if (result >= 0) return result;
+    return weather_met_request(lat, lon, temp, humidity, code, updated,
+                               dates, highs, lows, precip, codes, day_count);
 }
 
 const char *weather_description(int code) {
