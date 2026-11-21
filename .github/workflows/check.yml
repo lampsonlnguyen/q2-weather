@@ -77,28 +77,31 @@ jobs:
               --title "$RELEASE_TAG (device test)"
           fi
 
-  publish_weather_v122:
+  publish_weather_v130:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: q2-weather-card-app
           path: dist
-      - name: Publish v1.2.2 Settings and numeric keyboard
+      - name: Publish v1.3.0 weather and location fallback release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TARGET_SHA: ${{ github.sha }}
         run: |
-          if gh release view v1.2.2 >/dev/null 2>&1; then
-            echo 'v1.2.2 already exists; leaving published version unchanged'
+          if gh release view v1.3.0 >/dev/null 2>&1; then
+            echo 'v1.3.0 already exists; leaving published version unchanged'
             exit 0
           fi
-          gh release create v1.2.2 dist/q2-weather.zip \
+          awk '/^## v1.3.0/{f=1; next} /^## v1.2.2/{f=0} f' CHANGELOG.md > /tmp/q2-weather-release-notes.md
+          test -s /tmp/q2-weather-release-notes.md
+          gh release create v1.3.0 dist/q2-weather.zip \
             --target "$TARGET_SHA" \
-            --title "Q2 Weather v1.2.2 — Wheel Settings & 123 Keyboard" \
-            --notes "Settings is now a third click-wheel selectable entry on Weather's home screen, with clear visual highlight and a rounded-corner-safe header tab. City keyboard has ABC/123 switch with digits and common punctuation (- . / apostrophe @ # & ( ) + * ? = ! : comma). Backspace is a drawn left-arrow symbol instead of text. Preserves Space, Clear and Search controls, light/dark Q2 themes and saved locations. Changes are limited to q2-weather."
+            --title "Q2 Weather v1.3.0 — Weather & Location Fallbacks" \
+            --notes-file /tmp/q2-weather-release-notes.md
