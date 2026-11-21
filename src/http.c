@@ -75,6 +75,7 @@ int http_get(const char *url, char *body, size_t capacity) {
     int ok = result == 0 && status == 200 && r.used;
     if (!ok) {
         const char *endpoint = strstr(url, "api.met.no") ? "met.no forecast" :
+                               strstr(url, "nominatim.openstreetmap.org") ? "nominatim geocoding" :
                                strstr(url, "ipapi.co") ? "ipapi.co location" :
                                strstr(url, "api.open-meteo.com")
                                    ? "open-meteo forecast"
@@ -260,14 +261,57 @@ int weather_geocode_parse(const char *json, WeatherGeoResult results[WEATHER_GEO
     return count;
 }
 
+/* Nominatim is an independent, rate-limited geocoder used only when
+ * Open-Meteo's geocoding service is unavailable. Searches are user-initiated. */
+static int fallback_geocode(const char *encoded, WeatherGeoResult results[WEATHER_GEO_MAX]) {
+    char url[512], body[32768];
+    snprintf(url, sizeof url,
+             "https://nominatim.openstreetmap.org/search?q=%s&format=jsonv2&limit=8",
+             encoded);
+    if (http_get(url, body, sizeof body)) return -1;
+    const char *p = body;
+    int count = 0;
+    while ((p = strchr(p, '{')) && count < WEATHER_GEO_MAX) {
+        const char *end = strchr(p, '}');
+        if (!end || end - p >= 4096) return -1;
+        char object[4096], display[1024], lat_text[40], lon_text[40];
+        size_t length = (size_t)(end - p + 1);
+        memcpy(object, p, length);
+        object[length] = 0;
+        p = end + 1;
+        if (value_string(object, "display_name", display, sizeof display) ||
+            value_string(object, "lat", lat_text, sizeof lat_text) ||
+            value_string(object, "lon", lon_text, sizeof lon_text)) continue;
+        char *last_lat = NULL, *last_lon = NULL;
+        double lat = strtod(lat_text, &last_lat);
+        double lon = strtod(lon_text, &last_lon);
+        if (!last_lat || *last_lat || !last_lon || *last_lon ||
+            !isfinite(lat) || !isfinite(lon) ||
+            lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+        WeatherGeoResult *item = &results[count++];
+        size_t name_length = strcspn(display, ",");
+        if (name_length >= sizeof item->name) name_length = sizeof item->name - 1;
+        memcpy(item->name, display, name_length);
+        item->name[name_length] = 0;
+        snprintf(item->region, sizeof item->region, "%.63s", display);
+        item->latitude = lat;
+        item->longitude = lon;
+    }
+    if (count > 0) weather_log("GEO", "Using OSM Nominatim city search fallback");
+    return count;
+}
+
 int weather_geocode_many(const char *query, WeatherGeoResult results[WEATHER_GEO_MAX]) {
     char encoded[256], url[512], body[32768];
     if (encode(query, encoded, sizeof encoded)) return -1;
     snprintf(url, sizeof url,
              "https://geocoding-api.open-meteo.com/v1/search?name=%s&count=8&language=en&format=json",
              encoded);
-    if (http_get(url, body, sizeof body)) return -1;
-    return weather_geocode_parse(body, results);
+    if (!http_get(url, body, sizeof body)) {
+        int count = weather_geocode_parse(body, results);
+        if (count >= 0) return count;
+    }
+    return fallback_geocode(encoded, results);
 }
 
 int weather_geocode(const char *query, char *city, size_t cap, double *lat, double *lon) {
