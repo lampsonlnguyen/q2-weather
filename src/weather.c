@@ -39,16 +39,19 @@ int weather_refresh(WeatherApp *app,const WeatherBackend *backend,int detect_cur
         ours=1;
     }
     if(backend->wait_online(backend->ctx,25)) {result=WEATHER_OFFLINE;goto done;}
-    if(detect_current) {
-        char name[Q2_WEATHER_NAME]={0};
-        double lat=0,lon=0;
-        if(backend->detect_location(backend->ctx,name,sizeof(name),&lat,&lon)||
-           weather_set_location(app,0,name,lat,lon)) {
-            /* A location service outage must not block the saved city. */
-            result=WEATHER_GEO;
+    /* Saved Location is already geocoded. Fetch it directly and first,
+     * never depending on a request to an IP-based location service. */
+    for(int pass=0;pass<Q2_WEATHER_SLOTS;pass++) {
+        int i=pass==0 ? 1 : 0;
+        if(i==0 && detect_current) {
+            char name[Q2_WEATHER_NAME]={0};
+            double lat=0,lon=0;
+            if(backend->detect_location(backend->ctx,name,sizeof(name),&lat,&lon)||
+               weather_set_location(app,0,name,lat,lon)) {
+                /* Preserve an existing Home City and cached forecast. */
+                if(result==WEATHER_OK)result=WEATHER_GEO;
+            }
         }
-    }
-    for(int i=0;i<Q2_WEATHER_SLOTS;i++) {
         WeatherLocation *l=&app->locations[i];
         if(!l->used)continue;
         int temp=0,humidity=0,code=0;long timestamp=0;
