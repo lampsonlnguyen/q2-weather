@@ -1,5 +1,15 @@
 # Q2 Weather
 
+## Independent weather and location fallbacks
+
+- **Forecast:** Open-Meteo is primary. If the forecast request fails, the Q2 tries the independently hosted [MET Norway Locationforecast 2.0](https://api.met.no/weatherapi/locationforecast/2.0/documentation). Its hourly UTC readings are aggregated into seven daily forecasts. MET Norway does not supply the same precipitation probability fields, so absent probabilities display as unavailable.
+- **Current/Home Location:** Approximate public-IP detection tries `ipwho.is` and then `ipapi.co`. If both fail, open **Current Location** or **Settings → Set Home City** to search and select a city manually.
+- **Manual city search:** Open-Meteo geocoding is primary; OpenStreetMap Nominatim is the independent backup. Choosing a city saves its coordinates for later forecast requests. A manually set Home stays set between restarts; to restore automatic IP location detection, delete `.weather/manual-home` from the SD card.
+- **Saved Location:** Uses saved latitude/longitude directly and fetches its forecast *before* any public-IP location detection, including when both IP providers are down. It never needs the current-location services.
+- **Offline:** Previously cached weather remains visible. If both forecast providers are unavailable, changing the location cannot produce new weather until at least one forecast provider recovers.
+- **Attribution:** Backup forecast data © Norwegian Meteorological Institute (MET Norway), CC BY 4.0. Backup place-search data © OpenStreetMap contributors, ODbL.
+
+
 A lightweight, full-screen weather application for the Shanling Q2 running [Q2 Pod](https://github.com/DiamondBond/q2-pod). **One app under Library → Weather.**
 
 ## Features
