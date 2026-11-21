@@ -7,6 +7,9 @@
 #include <string.h>
 
 static const char *response;
+static const char *alternate_response;
+static int fail_open_meteo;
+static int fail_ipwho;
 static char requested_url[1024];
 static size_t (*writer)(char *, size_t, size_t, void *);
 static void *write_ctx;
@@ -31,9 +34,12 @@ int curl_easy_setopt(void *curl, int option, ...) {
 }
 int curl_easy_perform(void *curl) {
     (void)curl;
-    if (!response) return 6;
-    return writer((char *)response, 1, strlen(response), write_ctx) ==
-                   strlen(response)
+    if (fail_open_meteo && strstr(requested_url, "api.open-meteo.com")) return 28;
+    if (fail_ipwho && strstr(requested_url, "ipwho.is")) return 6;
+    const char *selected = strstr(requested_url, "api.met.no") ? alternate_response : response;
+    if (!selected) return 6;
+    return writer((char *)selected, 1, strlen(selected), write_ctx) ==
+                   strlen(selected)
                ? 0
                : 23;
 }
@@ -80,6 +86,43 @@ int main(void) {
     response = "{\"error\":true,\"reason\":\"invalid response\"}";
     assert(weather_request(33.77, -117.94, &temp, &humidity, &weather_code, &updated,
                            dates, highs, lows, rain, codes, 7) == -1);
+    /* If Open-Meteo is unreachable, use the independent MET Norway
+     * timeseries API instead of inventing a forecast. */
+    char met[16000];
+    size_t offset = 0;
+    offset += (size_t)snprintf(met + offset, sizeof met - offset,
+                               "{\\\"properties\\\":{\\\"timeseries\\\":[");
+    for (int i = 0; i < 7; ++i) {
+        offset += (size_t)snprintf(met + offset, sizeof met - offset,
+                   "%s{\\\"time\\\":\\\"2026-11-%02dT12:00:00Z\\\","
+                   "\\\"data\\\":{\\\"instant\\\":{\\\"details\\\":{"
+                   "\\\"air_temperature\\\":%d,\\\"relative_humidity\\\":60,"
+                   "\\\"cloud_area_fraction\\\":50}},"
+                   "\\\"next_1_hours\\\":{\\\"summary\\\":{"
+                   "\\\"symbol_code\\\":\\\"partlycloudy_day\\\"}}}}",
+                   i ? "," : "", 18 + i, 19 + i);
+    }
+    snprintf(met + offset, sizeof met - offset, "]}}");
+    alternate_response = met;
+    fail_open_meteo = 1;
+    assert(weather_request(33.77, -117.94, &temp, &humidity, &weather_code, &updated,
+                           dates, highs, lows, rain, codes, 7) == 0);
+    assert(strstr(requested_url, "api.met.no"));
+    assert(temp == 19 && humidity == 60 && highs[6] == 25 && rain[0] == -1);
+    fail_open_meteo = 0;
+    alternate_response = NULL;
+
+    /* If IPWhois fails, ipapi.co can supply a matching city and coordinates. */
+    char city[64] = {0};
+    double lat = 0, lon = 0;
+    response = "{\\\"city\\\":\\\"Westminster\\\","
+               "\\\"latitude\\\":33.759,\\\"longitude\\\":-117.987}";
+    fail_ipwho = 1;
+    assert(weather_geolocate(city, sizeof city, &lat, &lon) == 0);
+    assert(!strcmp(city, "Westminster") && lat > 33 && lon < -117);
+    assert(strstr(requested_url, "ipapi.co/json/"));
+    fail_ipwho = 0;
+
     /* Multiple same-name cities must remain distinct. */
     WeatherGeoResult cities[WEATHER_GEO_MAX] = {0};
     const char *ambiguous =
