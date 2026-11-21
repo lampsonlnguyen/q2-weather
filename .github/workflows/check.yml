@@ -20,7 +20,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install toolchain
         run: |
           sudo apt-get update
@@ -45,7 +45,7 @@ jobs:
           unzip -Z1 dist/q2-weather.zip | grep -Fx '.weather/run'
           ! unzip -Z1 dist/q2-weather.zip | grep -q 'q2-weather-service'
           file dist/.weather/q2-weather | grep -E 'ELF 32-bit LSB.*MIPS'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: q2-weather-card-app
           path: dist/q2-weather.zip
@@ -58,7 +58,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: q2-weather-card-app
           path: dist
@@ -83,8 +83,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
         with:
           name: q2-weather-card-app
           path: dist

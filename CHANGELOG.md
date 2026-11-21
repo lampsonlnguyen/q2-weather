@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased: a Q2 Pod card app
+## v1.4.0 — a Q2 Pod card app (2026-11-21)
 
 ### Changed
 - **Drawn by Q2 Pod:** Weather is now a card app, as Mixtape is: `q2app` without `game=1`, a `run` launcher, and one program, `q2-weather`, that answers Q2 Pod's pages (Q2SPOT/1). Q2 Pod draws every page itself, so the fonts, rows, selection, title bar, scrolling, click wheel, touch and theme (Minimal, Classic, Modern, every accent, Light Mode) are the firmware's own rather than a copy of them. Its row stays in Library → Apps.
@@ -15,6 +15,7 @@
 - The full-screen dashboard (`src/dashboard*.c`, `src/q2pod_scheme.c`, `src/theme.c`, `src/lang.c`), its built-in fonts and the `lang/` packs, and `q2-weather-service` as a separate file.
 
 ### Checks
+- CI uses `actions/checkout@v5`, `upload-artifact@v6` and `download-artifact@v7`, which run on Node.js 24 (no more Node.js 20 deprecation warnings).
 - `tests/test_pages.py` runs the host build on a cached forecast and checks the rows of every page; `make check` runs it.
 - On-device verification is still to do.
 

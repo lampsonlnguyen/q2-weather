@@ -2,7 +2,7 @@
 
 Weather for the Shanling Q2 running [Q2 Pod](https://github.com/DiamondBond/q2-pod): your location and one saved city, now and for seven days. A card app, like Mixtape: it lives in **Library → Apps → Weather**, and Q2 Pod draws every page itself, so it looks and moves exactly like the rest of the firmware, in every theme, accent and Light Mode.
 
-**Latest release: v1.3.0** — independent weather and location fallbacks. See [CHANGELOG.md](CHANGELOG.md) for the complete release notes.
+**Latest release: v1.4.0** — Weather is a Q2 Pod card app, drawn by the firmware in its own theme. See [CHANGELOG.md](CHANGELOG.md) for the complete release notes.
 
 ## Primary and fallback services
 
