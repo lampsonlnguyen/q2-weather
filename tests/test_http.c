@@ -91,15 +91,15 @@ int main(void) {
     char met[16000];
     size_t offset = 0;
     offset += (size_t)snprintf(met + offset, sizeof met - offset,
-                               "{\\\"properties\\\":{\\\"timeseries\\\":[");
+                               "{\"properties\":{\"timeseries\":[");
     for (int i = 0; i < 7; ++i) {
         offset += (size_t)snprintf(met + offset, sizeof met - offset,
-                   "%s{\\\"time\\\":\\\"2026-11-%02dT12:00:00Z\\\","
-                   "\\\"data\\\":{\\\"instant\\\":{\\\"details\\\":{"
-                   "\\\"air_temperature\\\":%d,\\\"relative_humidity\\\":60,"
-                   "\\\"cloud_area_fraction\\\":50}},"
-                   "\\\"next_1_hours\\\":{\\\"summary\\\":{"
-                   "\\\"symbol_code\\\":\\\"partlycloudy_day\\\"}}}}",
+                   "%s{\"time\":\"2026-11-%02dT12:00:00Z\","
+                   "\"data\":{\"instant\":{\"details\":{"
+                   "\"air_temperature\":%d,\"relative_humidity\":60,"
+                   "\"cloud_area_fraction\":50}},"
+                   "\"next_1_hours\":{\"summary\":{"
+                   "\"symbol_code\":\"partlycloudy_day\"}}}}",
                    i ? "," : "", 18 + i, 19 + i);
     }
     snprintf(met + offset, sizeof met - offset, "]}}");
@@ -115,8 +115,8 @@ int main(void) {
     /* If IPWhois fails, ipapi.co can supply a matching city and coordinates. */
     char city[64] = {0};
     double lat = 0, lon = 0;
-    response = "{\\\"city\\\":\\\"Westminster\\\","
-               "\\\"latitude\\\":33.759,\\\"longitude\\\":-117.987}";
+    response = "{\"city\":\"Westminster\","
+               "\"latitude\":33.759,\"longitude\":-117.987}";
     fail_ipwho = 1;
     assert(weather_geolocate(city, sizeof city, &lat, &lon) == 0);
     assert(!strcmp(city, "Westminster") && lat > 33 && lon < -117);
