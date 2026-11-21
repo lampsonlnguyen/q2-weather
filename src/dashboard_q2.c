@@ -31,8 +31,6 @@
 #define STATE_PATH "/mnt/mmc/.weather/state"
 #define SERVICE_PATH "/mnt/mmc/.weather/q2-weather-service"
 #define UNITS_PATH "/mnt/mmc/.weather/units"
-#define STATUS_PATH "/mnt/mmc/.weather/network-status"
-#define STARTUP_LOG "/mnt/mmc/.weather/startup.log"
 #define REFRESH_MS 1000
 
 static volatile sig_atomic_t interrupted;
@@ -63,21 +61,8 @@ static pid_t start_service(void) {
     if (connected_service()) return 0;
     pid_t pid = fork();
     if (pid == 0) {
-        execl(SERVICE_PATH, "q2-weather-service", (char *)NULL);
-        /* Startup failures occur before any HTTP request can create a log. */
-        FILE *file = fopen(STARTUP_LOG, "ab");
-        if (file) {
-            fprintf(file, "service exec failed: errno=%d\n", errno);
-            fclose(file);
-        }
+        execl(SERVICE_PATH, "q2-weather", (char *)NULL);
         _exit(127);
-    }
-    if (pid < 0) {
-        FILE *file = fopen(STARTUP_LOG, "ab");
-        if (file) {
-            fprintf(file, "service fork failed: errno=%d\n", errno);
-            fclose(file);
-        }
     }
     return pid > 0 ? pid : -1;
 }
@@ -244,20 +229,6 @@ static int read_cache(Dashboard *ui) {
     return 1;
 }
 
-static void read_network_status(Dashboard *ui) {
-    char next[sizeof ui->network_status] = {0};
-    FILE *file = fopen(STATUS_PATH, "rb");
-    if (file) {
-        (void)fgets(next, sizeof next, file);
-        fclose(file);
-        next[strcspn(next, "\n")] = 0;
-    }
-    if (strcmp(ui->network_status, next)) {
-        snprintf(ui->network_status, sizeof ui->network_status, "%s", next);
-        ui->redraw = 1;
-    }
-}
-
 static int open_input(void) {
     int fd = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (fd < 0) return -1;
@@ -284,7 +255,6 @@ int main(void) {
     weather_language_select(0);
     read_theme(&ui);
     (void)read_cache(&ui);
-    read_network_status(&ui);
     pid_t service = start_service();
     int fb = open("/dev/fb0", O_RDWR | O_CLOEXEC);
     if (fb < 0) {
@@ -352,15 +322,6 @@ int main(void) {
         }
         if (now - last_poll >= REFRESH_MS) {
             (void)read_cache(&ui);
-            read_network_status(&ui);
-            /* Show startup failures even when there is no weather.log yet. */
-            if (!connected_service()) {
-                const char *message = "Weather service unavailable";
-                if (strcmp(ui.network_status, message)) {
-                    snprintf(ui.network_status, sizeof ui.network_status, "%s", message);
-                    ui.redraw = 1;
-                }
-            }
             last_poll = now;
         }
         int city_state = atomic_load(&city_result);
@@ -397,12 +358,12 @@ int main(void) {
             if (ui.match_selected >= 0 && ui.match_selected < ui.match_count) {
                 char coordinates[90], response[512];
                 WeatherCityChoice *selected = &ui.matches[ui.match_selected];
-                snprintf(coordinates, sizeof coordinates, "%d %.6f %.6f",
-                         ui.city_target, selected->latitude, selected->longitude);
+                snprintf(coordinates, sizeof coordinates, "%.6f %.6f",
+                         selected->latitude, selected->longitude);
                 if (!service_command("savecity", coordinates, response, sizeof response) &&
                     strstr(response, "\tok\t")) {
                     ui.search_result = 2;
-                    ui.slot = ui.city_target;
+                    ui.slot = 1;
                 } else {
                     ui.search_result = -1;
                 }
