@@ -44,10 +44,7 @@ const int _IO_stdin_used = 0x20001;
 void *__dso_handle = 0;
 
 int __cxa_atexit(void (*)(void *), void *, void *);
-int atexit(void (*f)(void))
-{
-    return __cxa_atexit((void (*)(void *))f, 0, __dso_handle);
-}
+int atexit(void (*f)(void)) { return __cxa_atexit((void (*)(void *))f, 0, __dso_handle); }
 
 int __xstat(int, const char *, struct stat *);
 int __fxstat(int, int, struct stat *);
@@ -58,8 +55,7 @@ int __xmknod(int, const char *, mode_t, dev_t *);
 int stat(const char *p, struct stat *s) { return __xstat(_STAT_VER, p, s); }
 int fstat(int fd, struct stat *s) { return __fxstat(_STAT_VER, fd, s); }
 int lstat(const char *p, struct stat *s) { return __lxstat(_STAT_VER, p, s); }
-int fstatat(int d, const char *p, struct stat *s, int f)
-{
+int fstatat(int d, const char *p, struct stat *s, int f) {
     return __fxstatat(_STAT_VER, d, p, s, f);
 }
 int mknod(const char *p, mode_t m, dev_t d) { return __xmknod(_MKNOD_VER, p, m, &d); }
@@ -73,7 +69,6 @@ int __fxstatat64(int, int, const char *, struct stat64 *, int);
 int stat64(const char *p, struct stat64 *s) { return __xstat64(_STAT_VER, p, s); }
 int fstat64(int fd, struct stat64 *s) { return __fxstat64(_STAT_VER, fd, s); }
 int lstat64(const char *p, struct stat64 *s) { return __lxstat64(_STAT_VER, p, s); }
-int fstatat64(int d, const char *p, struct stat64 *s, int f)
-{
+int fstatat64(int d, const char *p, struct stat64 *s, int f) {
     return __fxstatat64(_STAT_VER, d, p, s, f);
 }
