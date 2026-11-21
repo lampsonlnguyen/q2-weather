@@ -123,6 +123,16 @@ int main(void) {
     assert(strstr(requested_url, "ipapi.co/json/"));
     fail_ipwho = 0;
 
+    /* City search remains available when Open-Meteo geocoding fails. */
+    response = "[{\\"display_name\\":\\"Westminster, California, United States\\","
+               "\\"lat\\":\\"33.759\\",\\"lon\\":\\"-117.987\\"}]";
+    fail_open_meteo = 1;
+    WeatherGeoResult osm[WEATHER_GEO_MAX] = {0};
+    assert(weather_geocode_many("Westminster", osm) == 1);
+    assert(strstr(requested_url, "nominatim.openstreetmap.org"));
+    assert(!strcmp(osm[0].name, "Westminster"));
+    fail_open_meteo = 0;
+
     /* Multiple same-name cities must remain distinct. */
     WeatherGeoResult cities[WEATHER_GEO_MAX] = {0};
     const char *ambiguous =
