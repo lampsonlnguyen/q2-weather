@@ -1,0 +1,25 @@
+name: Format one-time fallback feature
+on:
+  push:
+    branches: [feat/independent-weather-location-fallbacks]
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/independent-weather-location-fallbacks
+          persist-credentials: true
+      - run: sudo apt-get update && sudo apt-get install -y clang-format
+      - name: Format and commit if needed
+        run: |
+          clang-format -i src/*.c src/*.h tests/*.c
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/*.c src/*.h tests/*.c
+            git commit -m "style: apply clang-format to weather fallback code"
+            git push origin HEAD:feat/independent-weather-location-fallbacks
+          fi
