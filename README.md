@@ -24,7 +24,7 @@ A lightweight, full-screen weather application for the Shanling Q2 running [Q2 P
 
 ## Features
 
-- One Weather Library app that opens to a **location list**. Select Current Location or Saved Location to expand into that location's graphical seven-day forecast dashboard.
+- One Weather Library app that opens to a **location list**. Select Current Location or Saved Location to expand into that location's seven-day forecast list.
 - Current Location supports two public-IP providers and persistent manual Home City selection.
 - One Saved Location with direct coordinate-based forecasts, plus a separate manual Home City. The **built-in QWERTY keyboard** supports click-wheel and touchscreen city search with a geocoding fallback and up to eight matches.
 - Weather conditions, Celsius/Fahrenheit, humidity, daily high/low and precipitation chance.
@@ -42,7 +42,7 @@ A lightweight, full-screen weather application for the Shanling Q2 running [Q2 P
 | City entry | Select QWERTY key | Type / Space / Clear / Backspace / Search | Cancel / Settings |
 | City results | Scroll matching locations | Save highlighted city and coordinates | Return to QWERTY keyboard |
 
-**Touch:** Tap **SETTINGS** on the initial Locations screen, tap Current Location or Saved Location to open its forecast dashboard, then tap a forecast day for details. An unconfigured Current or Saved Location opens city entry automatically. The built-in QWERTY keyboard supports an **ABC/123** toggle for digits and punctuation, **SPACE**, **CLEAR** (erase the entire city entry), a drawn **backspace arrow** (delete one character), and **SEARCH**, all selectable with the click-wheel or touchscreen. Settings is also a third highlighted click-wheel choice on the initial locations screen. City lookup runs off the graphics thread; a firmware keyboard patch is not required. After searching, a result picker displays three matches at a time with safe spacing for the Q2's rounded screen. Scroll to a matching state/province and country, then press Center or tap to save it. The selection is checked against the returned coordinates before writing the location cache. A saved location includes the region and country to distinguish similarly named cities.
+**Touch:** Tap a location row on the initial Locations screen to open its forecast dashboard, then tap a forecast day for details; tap the Settings row for settings. An unconfigured Current or Saved Location opens city entry automatically. The built-in QWERTY keyboard supports an **ABC/123** toggle for digits and punctuation, **SPACE**, **CLEAR** (erase the entire city entry), **DEL** (delete one character), and **SEARCH**, all selectable with the click-wheel or touchscreen. Settings is also a third highlighted click-wheel choice on the initial locations screen. City lookup runs off the graphics thread; a firmware keyboard patch is not required. After searching, a result picker displays three matches at a time with safe spacing for the Q2's rounded screen. Scroll to a matching state/province and country, then press Center or tap to save it. The selection is checked against the returned coordinates before writing the location cache. A saved location includes the region and country to distinguish similarly named cities.
 
 **Settings:** Change saved city; toggle Celsius/Fahrenheit; refresh both locations; clear saved city; set Home City manually. Weather follows Q2 Pod's Minimal, Classic and Modern themes, their separate accent choices, and Light Mode (including automatic day/night). The screen has centered title and rounded-corner-safe margins.
 
@@ -126,9 +126,9 @@ If `build/sysroot` already exists, skip the sysroot command. The Q2 root filesys
 
 ## Architecture and power
 
-The launcher artwork is the editable [assets/icon.png](assets/icon.png): a vivid yellow-gold sun and white cloud on blue, distinct from individual forecast sprites. The build resizes it to the Q2's 52-pixel app icon automatically.
+The launcher artwork is the editable [assets/icon.png](assets/icon.png): a vivid yellow-gold sun and white cloud on blue. The build resizes it to the Q2's 52-pixel app icon automatically. It is the app's only image; weather conditions are text only, with no condition icons anywhere.
 
-`src/dashboard_q2.c` handles framebuffer painting only on input/data changes, Q2 input datagrams, and a slow 1-second cache check. `src/dashboard_render.c` draws theme-adaptive, high-contrast screens and user-replaceable PNG sprites compiled by `tools/pack_sprites.py`. It uses a proportionally spaced, anti-aliased sans-serif typeface baked into the app at build time. `src/dashboard.c` handles wheel, touch, keyboard and page navigation. `src/main.c`, `src/http.c` and `src/weather.c` provide the internal HTTPS/weather helper and cache.
+`src/dashboard_q2.c` handles framebuffer painting only on input/data changes, Q2 input datagrams, and a slow 1-second cache check. `src/dashboard_render.c` draws q2-pod list screens — 26 px status bar, 32 px rows, the active theme's selection painter (Minimal's card, Classic's gloss stops, Modern's accent bar) — from the scheme data ported in `src/q2pod_scheme.c` from q2-pod's own theme files; conditions are text only. It uses a proportionally spaced, anti-aliased sans-serif typeface baked into the app at build time by `tools/pack_fonts.py`. `src/dashboard.c` handles wheel, touch, keyboard and page navigation. `src/main.c`, `src/http.c` and `src/weather.c` provide the internal HTTPS/weather helper and cache.
 
 There is **one registered card app** and two executable processes only while the app is open: the graphical UI and its internal HTTP/weather worker. The worker is not a second Library entry. No continuous animation is used. Measured power usage and physical device behavior still require testing on Q2 hardware.
 
@@ -136,8 +136,8 @@ The cache is stored on the SD card at `.weather/state`, and network diagnostics 
 
 ## License and credits
 
-Built for Q2 Pod with thanks to DiamondBond and the Q2 community. The small sprite-rendering approach follows the technical design of [q2-diamond-crush](https://github.com/lampsonlnguyen/q2-diamond-crush). Weather forecasts use Open-Meteo with MET Norway as a fallback. IP-based location uses ipwho.is with ipapi.co as fallback; city search uses Open-Meteo geocoding with OpenStreetMap Nominatim as fallback.
+Built for Q2 Pod with thanks to DiamondBond and the Q2 community. The app inherits its look from q2-pod's own themes (Minimal, Classic, Modern) rather than drawing its own. Weather forecasts use Open-Meteo with MET Norway as a fallback. IP-based location uses ipwho.is with ipapi.co as fallback; city search uses Open-Meteo geocoding with OpenStreetMap Nominatim as fallback.
 
-### Weather icon attribution
+### Weather art
 
-The color weather icons are adapted from [Tomorrow.io Weather Code Icons](https://github.com/Tomorrow-IO-API/tomorrow-weather-codes), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). **Powered by Tomorrow.io** ([weather API](https://www.tomorrow.io/weather-api/)) — artwork only; weather forecasts are retrieved from Open-Meteo or MET Norway. Attributions and the exact original asset mapping are documented in [assets/sprites/ATTRIBUTION.md](assets/sprites/ATTRIBUTION.md). The `wind.png` and `humidity.png` icons are original Q2 Weather artwork. Replace any PNG under `assets/sprites/` to customize your own build; the build resizes all icons automatically.
+Conditions are text only — the app ships no weather icons. q2-pod's native art rows still work if JPEGs are placed in `.weather/icons/` on the SD card (`src/art.c` publishes them keyed the same way q2-pod does).

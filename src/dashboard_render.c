@@ -1,64 +1,32 @@
 /* SPDX-License-Identifier: MIT */
 #include "dashboard.h"
-#include "art.h"
 #include "lang.h"
+#include "q2pod_scheme.h"
 #define TR(name) weather_text(WX_##name)
 
 #include <stdio.h>
 #include <string.h>
 
-/* Replaceable PNG sprite atlas and antialiased sans-serif glyphs, packed at build time. */
-#include "weather_sprites.inc"
+/* q2-pod's own look, inherited from the firmware theme — no invented
+ * palettes, no pictorial icons. src/q2pod_scheme.c ports the scheme data
+ * (ACCENTS tones, selection painters, paper/ink, bar) from DiamondBond/q2-pod
+ * patch/offsets.inc, patch/theme.h and assets/themes/theme.xml; the
+ * render layer below only applies it. Conditions are text only.
+ * Fonts stay the existing build-time glyph rasterizer (a font engine, not
+ * new graphics); sizes/weights/caps follow the theme roles. */
+#include "weather_fonts.inc"
 
-/* Separate high-contrast palettes; Q2 settings determine the active half.
- * Palette accents track the firmware's selected theme/accent family. */
-typedef struct {
-    uint32_t bg, panel, raised, outline, highlight, text, muted, gold, rain;
-} Palette;
-static Palette palette;
-#define BG palette.bg
-#define PANEL palette.panel
-#define PANEL_LIGHT palette.raised
-#define BORDER palette.outline
-#define HIGHLIGHT palette.highlight
-#define TEXT palette.text
-#define DIM palette.muted
-#define GOLD palette.gold
-#define RAIN palette.rain
-
-static void choose_palette(const Dashboard *ui) {
-    /* iPod-inspired neutral system surfaces, not a fixed cyan/Astra look.
-     * Minimal, Classic and Modern each have distinct light/dark surfaces. */
-    if (ui->theme_id == 1) { /* Classic: ivory/silver with glossy selection */
-        palette = ui->theme_light
-                      ? (Palette){ 0xf8f8f6u, 0xffffffffu, 0xe4e7ebu, 0xa6a8abu, 0x007dbeu,
-                                   0x191a1bu, 0x52565bu,   0x976900u, 0x3168a3u }
-                      : (Palette){ 0x111112u, 0x242426u, 0x3b3b3du, 0x5d6066u, 0x5da7eeu,
-                                   0xf7f8f9u, 0xd5d7dau, 0xffca63u, 0x91b8edu };
-    } else if (ui->theme_id == 2) { /* Modern: flatter iPod-style cards */
-        palette = ui->theme_light
-                      ? (Palette){ 0xf5f5f6u, 0xffffffffu, 0xeceef2u, 0xaaaeb6u, 0x234a9du,
-                                   0x1a1a1cu, 0x484d58u,   0x875900u, 0x245d9au }
-                      : (Palette){ 0x121316u, 0x22242au, 0x343741u, 0x646a75u, 0xaab5d5u,
-                                   0xf8f8fau, 0xc5cad4u, 0xffd06bu, 0x94bff1u };
-    } else { /* Minimal: monochrome graphite with the user's accent */
-        palette = ui->theme_light
-                      ? (Palette){ 0xf8f8f8u, 0xffffffffu, 0xe8e8e8u, 0xb1b1b1u, 0x4d4d4du,
-                                   0x171717u, 0x505050u,   0x845a06u, 0x255e9du }
-                      : (Palette){ 0x101010u, 0x202020u, 0x383838u, 0x707070u, 0xbcbcbcu,
-                                   0xf6f6f6u, 0xd1d1d1u, 0xffd477u, 0x9ac8f5u };
-    }
-    /* Higher contrast than the stock tint for legibility on the small Q2. */
-    static const uint32_t dark_accent[] = { 0xbfc1c4u, 0xff8295u, 0x90dbd4u, 0xe0c88cu, 0x9bbcffu,
-                                            0xffb487u, 0xdb9fcfu, 0xf2e3c1u, 0xb9dc89u, 0x7ebfffu };
-    static const uint32_t light_accent[] = {
-        0x464646u, 0x9c213fu, 0x086a69u, 0x6f5918u, 0x1d4e9au,
-        0x8b410au, 0x77294fu, 0x5c4b25u, 0x436521u, 0x075e9cu
-    };
-    int accent = ui->theme_accent;
-    if (accent < 0 || accent > 9) accent = 0;
-    palette.highlight = ui->theme_light ? light_accent[accent] : dark_accent[accent];
-}
+static Q2PodScheme scheme;
+#define PAPER scheme.paper
+#define INK scheme.ink
+#define MUTED scheme.muted
+#define FILL scheme.fill
+#define SEL_TEXT (scheme.sel_text ? scheme.sel_text : scheme.ink)
+#define TEXT_X scheme.text_x
+#define BAR_H Q2POD_BAR_H
+#define ROW_H Q2POD_ROW_H
+/* Classic's list text ends at text_end 350 (classic-light/theme.xml). */
+#define TEXT_END 350
 
 static void rect(uint32_t *dst, unsigned stride, int x, int y, int w, int h, uint32_t col) {
     if (x < 0) w += x, x = 0;
@@ -96,11 +64,12 @@ static void pixel_blend(uint32_t *dst, unsigned stride, int x, int y, uint32_t c
 
 /* Proportional, antialiased DejaVu Sans; rasterized at build time.
  * Only alpha coverage lives on the Q2, not a font engine. */
-static void label(uint32_t *dst, unsigned stride, int x, int y, const char *s, int scale,
-                  uint32_t color, int max_chars) {
+static void label_styled(uint32_t *dst, unsigned stride, int x, int y, const char *s, int scale,
+                         uint32_t color, int max_chars, int caps) {
     int large = scale > 1;
     for (int printed = 0; *s && printed < max_chars; s++, printed++) {
         unsigned char c = (unsigned char)*s;
+        if (caps && c >= 'a' && c <= 'z') c -= 'a' - 'A';
         if (c < 32 || c > 126) c = '?';
         unsigned index = (unsigned)c - 32;
         if (large) {
@@ -120,6 +89,11 @@ static void label(uint32_t *dst, unsigned stride, int x, int y, const char *s, i
     }
 }
 
+static void label(uint32_t *dst, unsigned stride, int x, int y, const char *s, int scale,
+                  uint32_t color, int max_chars) {
+    label_styled(dst, stride, x, y, s, scale, color, max_chars, 0);
+}
+
 static int text_width(const char *s, int large) {
     int width = 0;
     for (; *s; ++s) {
@@ -128,6 +102,12 @@ static int text_width(const char *s, int large) {
         width += large ? weather_font_large_advance[c - 32] : weather_font_small_advance[c - 32];
     }
     return width;
+}
+
+/* Right-align text so its last column is right_x (Classic text_end 350). */
+static void label_right(uint32_t *dst, unsigned stride, const char *s, int large, uint32_t color,
+                        int right_x, int y) {
+    label(dst, stride, right_x - text_width(s, large), y, s, large, color, 64);
 }
 
 static const char *condition(int code) {
@@ -144,132 +124,158 @@ static const char *condition(int code) {
     return TR(CLOUDY);
 }
 
-static int icon_index(int code) {
-    const char *icon = weather_art_icon(code);
-    static const char *const names[] = { "sunny",      "partly",  "cloudy",      "overcast",
-                                         "fog",        "drizzle", "rain",        "showers",
-                                         "thunder",    "snow",    "snowshowers", "night",
-                                         "nightcloud", "wind",    "humidity" };
-    for (int i = 0; i < 15; ++i) {
-        if (!strcmp(icon, names[i])) return i;
+/* Linear interpolation between two stops, for the gloss bands. */
+static uint32_t stop_color(const Q2PodStop *stops, int n, int pos) {
+    if (pos <= stops[0].pos) return stops[0].rgb;
+    for (int i = 1; i < n; i++) {
+        if (pos <= stops[i].pos) {
+            int span = stops[i].pos - stops[i - 1].pos;
+            int t = span ? (pos - stops[i - 1].pos) * 255 / span : 255;
+            uint32_t a = stops[i - 1].rgb, b = stops[i].rgb;
+            unsigned r = (((a >> 16) & 255) * (255 - t) + ((b >> 16) & 255) * t) / 255;
+            unsigned g = (((a >> 8) & 255) * (255 - t) + ((b >> 8) & 255) * t) / 255;
+            unsigned bl = ((a & 255) * (255 - t) + (b & 255) * t) / 255;
+            return (r << 16) | (g << 8) | bl;
+        }
     }
-    return 3;
+    return stops[n - 1].rgb;
 }
 
-static void icon(uint32_t *dst, unsigned stride, int x, int y, int code, int scale) {
-    int index = icon_index(code);
-    for (int py = 0; py < 24; py++)
-        for (int px = 0; px < 24; px++) {
-            uint32_t argb = weather_sprite[index][py * 24 + px];
-            unsigned alpha = argb >> 24;
-            if (!alpha) continue;
-            for (int yy = 0; yy < scale; yy++)
-                for (int xx = 0; xx < scale; xx++)
-                    pixel_blend(dst, stride, x + px * scale + xx, y + py * scale + yy,
-                                argb & 0xffffffu, alpha);
+/* The theme's selection painter (patch/theme.h PAINT_SELECTION) over a row.
+ * tall: a row taller than the set's 32 px pitch takes the tall top/edge rows. */
+static void paint_selection(uint32_t *dst, unsigned stride, int x, int y, int w, int h) {
+    if (scheme.painter == Q2POD_SEL_CARD) {
+        /* Minimal's card: SEL_INSET px in from each side, SEL_RADIUS corners
+         * (patch/offsets.inc). */
+        const int inset = 6, radius = 6;
+        int x0 = x + inset, y0 = y + inset, w0 = w - 2 * inset, h0 = h - 2 * inset;
+        if (w0 <= 0 || h0 <= 0) return;
+        for (int px = x0; px < x0 + w0; px++) {
+            for (int py = y0; py < y0 + h0; py++) {
+                int cx = px < x0 + radius         ? x0 + radius - px
+                         : px >= x0 + w0 - radius ? px - (x0 + w0 - radius - 1)
+                                                  : 0;
+                int cy = py < y0 + radius         ? y0 + radius - py
+                         : py >= y0 + h0 - radius ? py - (y0 + h0 - radius - 1)
+                                                  : 0;
+                if (cx * cx + cy * cy > radius * radius) continue;
+                dst[px * stride + DASH_HEIGHT - py - 1] = 0xff000000u | FILL;
+            }
         }
+        return;
+    }
+    if (scheme.painter == Q2POD_SEL_BAR) {
+        /* Modern's bar: the accent's flat top tone over the row. */
+        rect(dst, stride, x, y, w, h, scheme.accent_top);
+        return;
+    }
+    /* Classic's stops: a crisp top line, the gloss band, and the edge row;
+     * a tall row takes its second row and last two rows (scheme_t). */
+    int tall = h > ROW_H;
+    for (int row = 0; row < h; row++) {
+        uint32_t col;
+        if (row == 0)
+            col = scheme.sel_top;
+        else if (row == h - 1)
+            col = scheme.sel_edge;
+        else if (tall && row == 1)
+            col = scheme.sel_tall_top;
+        else if (tall && row == h - 2)
+            col = scheme.sel_tall_line;
+        else
+            col = stop_color(scheme.sel, Q2POD_GLOSS_STOPS, row * 100 / (h - 1));
+        rect(dst, stride, x, y + row, w, 1, col);
+    }
+}
+
+/* A list row: paper, or the theme's selection when selected. The chevron
+ * (">", text — never a drawn glyph) sits on the selected row only, as in
+ * Classic (chevron selected=1); Minimal adds its accent dot at HOME_DOT_X. */
+static void list_row(uint32_t *dst, unsigned stride, int y, int h, int selected) {
+    if (selected) {
+        paint_selection(dst, stride, 0, y, DASH_WIDTH, h);
+        if (scheme.painter == Q2POD_SEL_CARD)
+            rect(dst, stride, 25, y + h / 2 - 3, 6, 6, scheme.accent_top); /* HOME_DOT */
+        label(dst, stride, 317, y + (h - 18) / 2, ">", 0,
+              scheme.painter == Q2POD_SEL_CARD ? scheme.chevron : SEL_TEXT, 1);
+    }
+}
+
+/* A detail row: caption on the left, value right-aligned like q2-pod's
+ * settings values (classic-light/theme.xml: names in ink, values grey). */
+static void detail_row(uint32_t *dst, unsigned stride, int y, const char *title, const char *value,
+                       int selected) {
+    list_row(dst, stride, y, ROW_H, selected);
+    uint32_t ink = selected ? SEL_TEXT : INK;
+    label_styled(dst, stride, TEXT_X, y + 7, title, 0, ink, 25, scheme.caps_rows);
+    /* A selected row's value stops short of the chevron (Classic chevron x 317). */
+    label_right(dst, stride, value, 0, selected ? SEL_TEXT : MUTED, selected ? 310 : TEXT_END,
+                y + 7);
 }
 
 static int units(int c, int f) { return f ? c * 9 / 5 + 32 : c; }
 
-static void location(uint32_t *dst, unsigned stride, const Dashboard *ui, int slot, int y,
-                     int height) {
+/* A location as two-line list rows: meta label, name, status. */
+static void location_rows(uint32_t *dst, unsigned stride, const Dashboard *ui, int slot, int y,
+                          int selected) {
     const WeatherLocation *loc = &ui->weather.locations[slot];
-    uint32_t fill = slot == ui->slot ? PANEL_LIGHT : PANEL;
-    rect(dst, stride, 31, y, 196, height, fill);
-    frame(dst, stride, 31, y, 196, height, slot == ui->slot ? HIGHLIGHT : BORDER);
-    label(dst, stride, 43, y + 5, slot ? TR(SAVED_LOCATION) : TR(CURRENT_LOCATION), 1, DIM, 18);
+    list_row(dst, stride, y, 64, selected);
+    uint32_t ink = selected ? SEL_TEXT : INK;
+    uint32_t dim = selected ? SEL_TEXT : MUTED;
+    label_styled(dst, stride, TEXT_X, y + 4, slot ? TR(SAVED_LOCATION) : TR(CURRENT_LOCATION), 0,
+                 dim, 21, scheme.caps_rows);
     if (!loc->used) {
-        label(dst, stride, 43, y + 31, slot ? TR(ADD_CITY) : TR(FINDING_LOCATION), 1, TEXT, 24);
+        label(dst, stride, TEXT_X, y + 22, slot ? TR(ADD_CITY) : TR(FINDING_LOCATION), 0, ink, 24);
         return;
     }
-    label(dst, stride, 43, y + 20, loc->name, 1, TEXT, 22);
+    label(dst, stride, TEXT_X, y + 22, loc->name, 0, ink, 28);
     if (loc->valid) {
-        char temp[24], caption[36];
-        snprintf(temp, sizeof temp, "%d%c", units(loc->temperature_c, ui->units_f),
-                 ui->units_f ? 'F' : 'C');
-        label(dst, stride, 43, y + 36, temp, 2, TEXT, 9);
-        snprintf(caption, sizeof caption, "%s %d%%", TR(HUMIDITY), loc->humidity);
-        label(dst, stride, 43, y + height - 23, caption, 1, DIM, 18);
+        char status[64];
+        snprintf(status, sizeof status, "%d%c  %s  %s %d%%", units(loc->temperature_c, ui->units_f),
+                 ui->units_f ? 'F' : 'C', condition(loc->weather_code), TR(HUMIDITY),
+                 loc->humidity);
+        label(dst, stride, TEXT_X, y + 42, status, 0, dim, 36);
     } else {
-        label(dst, stride, 43, y + 39, TR(LOADING), 1, DIM, 21);
+        label(dst, stride, TEXT_X, y + 42, TR(LOADING), 0, dim, 21);
     }
 }
 
-/* The entry page mirrors the original Weather app: pick a location first. */
-static void location_choice(uint32_t *dst, unsigned stride, const Dashboard *ui, int slot, int y) {
-    const WeatherLocation *loc = &ui->weather.locations[slot];
-    uint32_t fill = slot == ui->home_selected ? PANEL_LIGHT : PANEL;
-    rect(dst, stride, 31, y, 313, 90, fill);
-    frame(dst, stride, 31, y, 313, 90, slot == ui->home_selected ? HIGHLIGHT : BORDER);
-    label(dst, stride, 43, y + 6, slot ? TR(SAVED_LOCATION) : TR(CURRENT_LOCATION), 1, DIM, 21);
-    if (loc->used) {
-        label(dst, stride, 43, y + 27, loc->name, 2, TEXT, 16);
-        if (loc->valid) {
-            char details[48];
-            snprintf(details, sizeof details, "%d%c  %s", units(loc->temperature_c, ui->units_f),
-                     ui->units_f ? 'F' : 'C', condition(loc->weather_code));
-            label(dst, stride, 43, y + 64, details, 1, DIM, 28);
-            icon(dst, stride, 279, y + 20, loc->weather_code, 2);
-        } else {
-            label(dst, stride, 43, y + 64, TR(LOADING), 1, DIM, 26);
+static void paint_bar(uint32_t *dst, unsigned stride, const Dashboard *ui) {
+    if (scheme.painter == Q2POD_SEL_STOPS) {
+        /* Classic's gloss bar: the stops, the light half's second line
+         * above the line row, then the line (classic-light/theme.xml). */
+        for (int row = 0; row < BAR_H - 1; row++) {
+            uint32_t col = stop_color(scheme.bar, Q2POD_BAR_STOPS, row * 100 / (BAR_H - 2));
+            rect(dst, stride, 0, row, DASH_WIDTH, 1, col);
         }
+        if (scheme.bar_line2) rect(dst, stride, 0, BAR_H - 2, DASH_WIDTH, 1, scheme.bar_line2);
+        rect(dst, stride, 0, BAR_H - 1, DASH_WIDTH, 1, scheme.bar_line);
     } else {
-        label(dst, stride, 43, y + 31, slot ? TR(ADD_CITY) : "SET HOME CITY", 2, TEXT, 20);
-        label(dst, stride, 43, y + 64, slot ? TR(CHOOSE_CITY) : "CHOOSE CITY", 1, DIM, 29);
+        /* Minimal / Modern: the flat bar fill (MINIMAL_FILL / LIGHT_BAR). */
+        rect(dst, stride, 0, 0, DASH_WIDTH, BAR_H, scheme.bar[0].rgb);
     }
-}
-
-static void forecast(uint32_t *dst, unsigned stride, const Dashboard *ui) {
-    const WeatherLocation *loc = &ui->weather.locations[ui->slot];
-    label(dst, stride, 33, 191, TR(FORECAST), 1, TEXT, 20);
-    for (int i = 0; i < Q2_FORECAST_DAYS; i++) {
-        int x = 31 + i * 45;
-        uint32_t fill = i == ui->day ? PANEL_LIGHT : PANEL;
-        rect(dst, stride, x, 209, 42, 74, fill);
-        frame(dst, stride, x, 209, 42, 74, i == ui->day ? HIGHLIGHT : BORDER);
-        if (!loc->forecast_valid) {
-            label(dst, stride, x + 9, 237, "--", 1, DIM, 2);
-            continue;
-        }
-        const WeatherDay *d = &loc->days[i];
-        label(dst, stride, x + 4, 215, d->date + 5, 1, DIM, 5);
-        icon(dst, stride, x + 9, 229, d->weather_code, 1);
-        char temp[24];
-        snprintf(temp, sizeof temp, "%d", units(d->high_c, ui->units_f));
-        label(dst, stride, x + 6, 257, temp, 1, i == ui->day ? GOLD : TEXT, 3);
-        snprintf(temp, sizeof temp, "%d", units(d->low_c, ui->units_f));
-        label(dst, stride, x + 21, 268, temp, 1, DIM, 3);
-    }
-}
-
-void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
-    choose_palette(ui);
-    rect(dst, stride, 0, 0, DASH_WIDTH, DASH_HEIGHT, BG);
-    rect(dst, stride, 0, 0, DASH_WIDTH, 39, PANEL);
-    rect(dst, stride, 0, 38, DASH_WIDTH, 1, BORDER);
     if (ui->page) {
         char back[48];
         snprintf(back, sizeof back, "< %s", TR(BACK));
-        label(dst, stride, 42, 12, back, 1, TEXT, 12);
+        label(dst, stride, 12, 4, back, 0, INK, 12);
     }
     const char *title = TR(WEATHER);
-    label(dst, stride, (DASH_WIDTH - text_width(title, 0)) / 2, 12, title, 1, TEXT, 24);
-    if (ui->page == 0) {
-        int selected = ui->home_selected == 2;
-        rect(dst, stride, 266, 9, 68, 25, selected ? PANEL_LIGHT : PANEL);
-        frame(dst, stride, 266, 9, 68, 25, selected ? HIGHLIGHT : BORDER);
-        label(dst, stride, 300 - text_width(TR(SETTINGS), 0) / 2, 12, TR(SETTINGS), 1,
-              selected ? HIGHLIGHT : DIM, 14);
-    } else
-        label(dst, stride, 279, 12, "Q2 POD", 1, DIM, 8);
+    label_styled(dst, stride, (DASH_WIDTH - text_width(title, 0)) / 2, 4, title, 0, INK, 24,
+                 scheme.caps_bar);
+    if (ui->page) label_right(dst, stride, "Q2 POD", 0, MUTED, DASH_WIDTH - 12, 4);
+}
+
+void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
+    q2pod_scheme_resolve(ui->theme_id, ui->theme_accent, ui->theme_light, &scheme);
+    rect(dst, stride, 0, 0, DASH_WIDTH, DASH_HEIGHT, PAPER);
+    paint_bar(dst, stride, ui);
     if (ui->page == 3) {
-        label(dst, stride, 43, 49, ui->city_target ? TR(SEARCH_CITY) : "SET HOME CITY", 1, TEXT,
-              23);
-        rect(dst, stride, 33, 72, 309, 34, PANEL);
-        frame(dst, stride, 33, 72, 309, 34, HIGHLIGHT);
-        label(dst, stride, 45, 80, ui->city_length ? ui->city_query : "City name...", 1,
-              ui->city_length ? TEXT : DIM, 35);
+        label_styled(dst, stride, TEXT_X, 49, ui->city_target ? TR(SEARCH_CITY) : "SET HOME CITY",
+                     0, INK, 23, scheme.caps_rows);
+        rect(dst, stride, 33, 72, 309, 34, PAPER);
+        frame(dst, stride, 33, 72, 309, 34, scheme.accent_top);
+        label(dst, stride, 45, 80, ui->city_length ? ui->city_query : "City name...", 0,
+              ui->city_length ? INK : MUTED, 35);
         static const char *const letters[] = { "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" };
         static const char *const numbers[] = { "1234567890", "-./'@#&()", "+*?=!:," };
         const char *const *rows = ui->keyboard_numbers ? numbers : letters;
@@ -282,126 +288,153 @@ void dashboard_render(const Dashboard *ui, uint32_t *dst, unsigned stride) {
                 int x = offsets[row] + col * 31;
                 int y = tops[row];
                 int selected = ui->keyboard_index == index;
-                rect(dst, stride, x, y, 29, 32, selected ? HIGHLIGHT : PANEL_LIGHT);
-                frame(dst, stride, x, y, 29, 32, selected ? HIGHLIGHT : BORDER);
+                if (selected)
+                    paint_selection(dst, stride, x, y, 29, 32);
+                else {
+                    rect(dst, stride, x, y, 29, 32, PAPER);
+                    frame(dst, stride, x, y, 29, 32, MUTED);
+                }
                 char letter[] = { rows[row][col], 0 };
                 int width = text_width(letter, 0);
-                label(dst, stride, x + (29 - width) / 2, y + 8, letter, 1, selected ? BG : TEXT, 1);
+                label(dst, stride, x + (29 - width) / 2, y + 8, letter, 0,
+                      selected ? SEL_TEXT : INK, 1);
             }
         }
-        /* The action row has five buttons safely inside the rounded screen.
-         * Backspace is drawn as a pixel arrow, not a text substitute. */
+        /* The action row keeps its five buttons; backspace is the text
+         * label DEL now, never a pixel-drawn arrow. */
         for (int i = 0; i < 5; ++i) {
             int x = 34 + i * 62;
             int selected = ui->keyboard_index == 26 + i;
-            uint32_t ink = selected ? BG : TEXT;
-            rect(dst, stride, x, 238, 59, 37, selected ? HIGHLIGHT : PANEL);
-            frame(dst, stride, x, 238, 59, 37, selected ? HIGHLIGHT : BORDER);
-            if (i == 3) {
-                /* Compact, centered backspace arrow; button size unchanged. */
-                rect(dst, stride, x + 23, 255, 15, 2, ink);
-                for (int d = 0; d < 5; ++d) {
-                    rect(dst, stride, x + 23 + d, 255 - d, 2, 2, ink);
-                    rect(dst, stride, x + 23 + d, 255 + d, 2, 2, ink);
-                }
-            } else {
-                const char *text = i == 0   ? (ui->keyboard_numbers ? "ABC" : "123")
-                                   : i == 1 ? "SPACE"
-                                   : i == 2 ? "CLEAR"
-                                            : "SEARCH";
-                label(dst, stride, x + (59 - text_width(text, 0)) / 2, 248, text, 1, ink, 8);
+            uint32_t ink = selected ? SEL_TEXT : INK;
+            if (selected)
+                paint_selection(dst, stride, x, 238, 59, 37);
+            else {
+                rect(dst, stride, x, 238, 59, 37, PAPER);
+                frame(dst, stride, x, 238, 59, 37, MUTED);
             }
+            const char *text = i == 0   ? (ui->keyboard_numbers ? "ABC" : "123")
+                               : i == 1 ? "SPACE"
+                               : i == 2 ? "CLEAR"
+                               : i == 3 ? "DEL"
+                                        : "SEARCH";
+            label(dst, stride, x + (59 - text_width(text, 0)) / 2, 248, text, 0, ink, 8);
         }
-        label(dst, stride, 42, 289, "WHEEL SELECT   CENTER TYPE   BACK", 1, DIM, 39);
+        label(dst, stride, 42, 289, "WHEEL SELECT   CENTER TYPE   BACK", 0, MUTED, 39);
         return;
     }
     if (ui->page == 5) {
-        label(dst, stride, 43, 49, "SELECT LOCATION", 1, TEXT, 21);
+        label_styled(dst, stride, TEXT_X, 33, "SELECT LOCATION", 0, INK, 21, scheme.caps_rows);
         char summary[55];
         snprintf(summary, sizeof summary, "%d matches - select exact city", ui->match_count);
-        label(dst, stride, 43, 72, summary, 1, DIM, 36);
+        label(dst, stride, TEXT_X, 58, summary, 0, MUTED, 36);
         int start = (ui->match_selected / 3) * 3;
         for (int row = 0; row < 3 && start + row < ui->match_count; ++row) {
             int idx = start + row;
-            int y = 94 + row * 60;
+            int y = 90 + row * 64;
             int selected = idx == ui->match_selected;
-            rect(dst, stride, 34, y, 307, 54, selected ? PANEL_LIGHT : PANEL);
-            frame(dst, stride, 34, y, 307, 54, selected ? HIGHLIGHT : BORDER);
-            label(dst, stride, 46, y + 3, ui->matches[idx].name, 1, selected ? HIGHLIGHT : TEXT,
-                  32);
-            label(dst, stride, 46, y + 26, ui->matches[idx].region, 1, DIM, 36);
-            label(dst, stride, 322, y + 12, ">", 1, HIGHLIGHT, 1);
+            list_row(dst, stride, y, 64, selected);
+            uint32_t ink = selected ? SEL_TEXT : INK;
+            uint32_t dim = selected ? SEL_TEXT : MUTED;
+            label(dst, stride, TEXT_X, y + 6, ui->matches[idx].name, 0, ink, 32);
+            label(dst, stride, TEXT_X, y + 34, ui->matches[idx].region, 0, dim, 36);
         }
         if (ui->match_count > 3) {
-            char progress[20];
+            char progress[32];
             snprintf(progress, sizeof progress, "%d / %d", ui->match_selected + 1, ui->match_count);
-            label(dst, stride, 275, 277, progress, 1, DIM, 12);
+            label_right(dst, stride, progress, 0, MUTED, TEXT_END, 290);
         }
-        label(dst, stride, 43, 290, "WHEEL  CENTER SELECT  BACK", 1, DIM, 35);
+        label(dst, stride, TEXT_X, 300, "WHEEL  CENTER SELECT  BACK", 0, MUTED, 35);
         return;
     }
     if (ui->page == 2) {
-        label(dst, stride, 40, 47, TR(SETTINGS), 2, TEXT, 16);
         const char *titles[] = { TR(CHANGE_CITY), TR(UNITS), TR(REFRESH), TR(CLEAR_CITY),
                                  "Set Home City" };
         for (int i = 0; i < 5; i++) {
-            int y = 76 + i * 48;
-            rect(dst, stride, 31, y, 313, 43, ui->keyboard_index == i ? PANEL_LIGHT : PANEL);
-            frame(dst, stride, 31, y, 313, 43, ui->keyboard_index == i ? HIGHLIGHT : BORDER);
-            label(dst, stride, 43, y + 12, titles[i], 1, TEXT, 25);
+            int y = BAR_H + i * ROW_H;
+            list_row(dst, stride, y, ROW_H, ui->keyboard_index == i);
+            uint32_t ink = ui->keyboard_index == i ? SEL_TEXT : INK;
+            label_styled(dst, stride, TEXT_X, y + 7, titles[i], 0, ink, 25, scheme.caps_rows);
             if (i == 1)
-                label(dst, stride, 292, y + 12, ui->units_f ? "FAHR" : "CELS", 1, HIGHLIGHT, 5);
+                label_right(dst, stride, ui->units_f ? "FAHR" : "CELS", 0,
+                            ui->keyboard_index == i ? SEL_TEXT : MUTED,
+                            ui->keyboard_index == i ? 310 : TEXT_END, y + 7);
         }
-        /* Fifth setting uses the former footer area. */
         return;
     }
     if (ui->page == 0) {
-        label(dst, stride, 37, 49, TR(LOCATIONS), 1, DIM, 15);
-        location_choice(dst, stride, ui, 0, 65);
-        location_choice(dst, stride, ui, 1, 165);
-        label(dst, stride, 40, 276, TR(SELECT_LOCATION), 1, DIM, 47);
-        label(dst, stride, 42, 289, "CENTER OPEN   BACK EXIT", 1, DIM, 33);
+        location_rows(dst, stride, ui, 0, BAR_H, ui->home_selected == 0);
+        location_rows(dst, stride, ui, 1, BAR_H + 64, ui->home_selected == 1);
+        int y = BAR_H + 128;
+        list_row(dst, stride, y, ROW_H, ui->home_selected == 2);
+        label_styled(dst, stride, TEXT_X, y + 7, TR(SETTINGS), 0,
+                     ui->home_selected == 2 ? SEL_TEXT : INK, 14, scheme.caps_rows);
+        label(dst, stride, TEXT_X, 296, TR(SELECT_LOCATION), 0, MUTED, 47);
         return;
     }
     if (ui->page == 1) {
-        location(dst, stride, ui, ui->slot, 50, 133);
         const WeatherLocation *loc = &ui->weather.locations[ui->slot];
-        rect(dst, stride, 237, 50, 107, 133, PANEL);
-        frame(dst, stride, 237, 50, 107, 133, BORDER);
+        label_styled(dst, stride, TEXT_X, BAR_H + 4, loc->used ? loc->name : "No location", 0, INK,
+                     28, scheme.caps_rows);
         if (loc->valid) {
-            icon(dst, stride, 255, 60, loc->weather_code, 3);
+            char humidity[24];
+            snprintf(humidity, sizeof humidity, "%s %d%%", TR(HUMIDITY), loc->humidity);
+            label_right(dst, stride, humidity, 0, MUTED, TEXT_END, BAR_H + 4);
             char temp[22];
             snprintf(temp, sizeof temp, "%d%c", units(loc->temperature_c, ui->units_f),
                      ui->units_f ? 'F' : 'C');
-            label(dst, stride, 250, 138, temp, 2, TEXT, 5);
-            label(dst, stride, 243, 165, condition(loc->weather_code), 1, DIM, 13);
+            label(dst, stride, TEXT_X, BAR_H + 24, temp, 2, INK, 5);
+            label(dst, stride, TEXT_X + text_width(temp, 1) + 12, BAR_H + 34,
+                  condition(loc->weather_code), 0, MUTED, 13);
         } else {
-            label(dst, stride, 258, 113, TR(NO_DATA), 1, DIM, 9);
+            label(dst, stride, TEXT_X, BAR_H + 30, TR(NO_DATA), 0, MUTED, 9);
         }
-        forecast(dst, stride, ui);
-        label(dst, stride, 42, 289, "CENTER DETAILS   BACK LOCATIONS", 1, DIM, 39);
+        /* Forecast as seven 32 px list rows: day, condition text, high/low.
+         * No pictorial icons; the condition is text only. */
+        for (int i = 0; i < Q2_FORECAST_DAYS; i++) {
+            int y = BAR_H + 64 + i * ROW_H;
+            list_row(dst, stride, y, ROW_H, i == ui->day);
+            uint32_t ink = i == ui->day ? SEL_TEXT : INK;
+            uint32_t dim = i == ui->day ? SEL_TEXT : MUTED;
+            if (!loc->forecast_valid) {
+                label(dst, stride, TEXT_X, y + 7, "--", 0, dim, 2);
+                continue;
+            }
+            const WeatherDay *d = &loc->days[i];
+            label(dst, stride, TEXT_X, y + 7, d->date + 5, 0, ink, 5);
+            label(dst, stride, 110, y + 7, condition(d->weather_code), 0, dim, 20);
+            char temp[24];
+            snprintf(temp, sizeof temp, "%d", units(d->high_c, ui->units_f));
+            label_right(dst, stride, temp, 0, ink, 265, y + 7);
+            snprintf(temp, sizeof temp, "%d", units(d->low_c, ui->units_f));
+            label_right(dst, stride, temp, 0, dim, 310, y + 7);
+        }
     } else {
         const WeatherLocation *loc = &ui->weather.locations[ui->slot];
-        label(dst, stride, 40, 47, loc->used ? loc->name : "No location", 2, TEXT, 20);
+        label_styled(dst, stride, TEXT_X, BAR_H + 7, loc->used ? loc->name : "No location", 0, INK,
+                     20, scheme.caps_rows);
         if (loc->forecast_valid) {
             const WeatherDay *day = &loc->days[ui->day];
-            icon(dst, stride, 39, 104, day->weather_code, 4);
-            label(dst, stride, 152, 104, day->date, 1, DIM, 11);
-            label(dst, stride, 152, 125, condition(day->weather_code), 1, TEXT, 27);
-            char text[48];
-            snprintf(text, sizeof text, "%s %d%c", TR(HIGH), units(day->high_c, ui->units_f),
+            char temp[48];
+            snprintf(temp, sizeof temp, "%d%c", units(day->high_c, ui->units_f),
                      ui->units_f ? 'F' : 'C');
-            label(dst, stride, 152, 152, text, 2, GOLD, 12);
-            snprintf(text, sizeof text, "%s %d%c", TR(LOW), units(day->low_c, ui->units_f),
+            label(dst, stride, TEXT_X, BAR_H + ROW_H + 6, temp, 2, INK, 5);
+            label(dst, stride, TEXT_X + text_width(temp, 1) + 12, BAR_H + ROW_H + 16,
+                  condition(day->weather_code), 0, MUTED, 27);
+            int y = BAR_H + ROW_H + 48;
+            label(dst, stride, TEXT_X, y + 7, day->date, 0, INK, 11);
+            snprintf(temp, sizeof temp, "%d%c", units(day->high_c, ui->units_f),
                      ui->units_f ? 'F' : 'C');
-            label(dst, stride, 152, 182, text, 2, RAIN, 12);
+            detail_row(dst, stride, y + ROW_H, TR(HIGH), temp, 0);
+            snprintf(temp, sizeof temp, "%d%c", units(day->low_c, ui->units_f),
+                     ui->units_f ? 'F' : 'C');
+            detail_row(dst, stride, y + ROW_H * 2, TR(LOW), temp, 0);
             if (day->precipitation_pct >= 0) {
-                snprintf(text, sizeof text, "%s %d%%", TR(RAIN_CHANCE), day->precipitation_pct);
-                label(dst, stride, 152, 214, text, 1, DIM, 27);
+                snprintf(temp, sizeof temp, "%d%%", day->precipitation_pct);
+                detail_row(dst, stride, y + ROW_H * 3, TR(RAIN_CHANCE), temp, 0);
             }
         } else {
-            label(dst, stride, 42, 113, TR(FORECAST_UNAVAILABLE), 1, DIM, 32);
+            label(dst, stride, TEXT_X, BAR_H + ROW_H + 16, TR(FORECAST_UNAVAILABLE), 0, MUTED, 32);
         }
-        label(dst, stride, 42, 289, "CENTER FORECAST   BACK", 1, DIM, 32);
+        label(dst, stride, TEXT_X, 296, "CENTER FORECAST   BACK", 0, MUTED, 32);
     }
 }

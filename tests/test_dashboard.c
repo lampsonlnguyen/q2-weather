@@ -20,7 +20,7 @@ int main(void) {
     assert(menu.page == 0 && menu.home_selected == 2);
     assert(dashboard_input(&menu, "w 28") == 1);
     assert(menu.home_selected == 1);
-    assert(dashboard_input(&menu, "t u 300 20") == 1);
+    assert(dashboard_input(&menu, "t u 100 170") == 1); /* Settings row */
     assert(menu.home_selected == 2 && menu.page == 2);
 
     /* Q2's clockwise wheel travel is negative: select the next row. */
@@ -44,7 +44,7 @@ int main(void) {
     /* Touch backspace removes only one character, then SPACE appends. */
     assert(dashboard_input(&ui, "t u 105 127") == 1); /* E */
     assert(!strcmp(ui.city_query, "QWE"));
-    assert(dashboard_input(&ui, "t u 245 257") == 1); /* drawn arrow */
+    assert(dashboard_input(&ui, "t u 245 257") == 1); /* DEL key */
     assert(!strcmp(ui.city_query, "QW"));
     assert(dashboard_input(&ui, "t u 125 257") == 1); /* SPACE */
     assert(!strcmp(ui.city_query, "QW "));
@@ -95,11 +95,11 @@ int main(void) {
     assert(dashboard_input(&ui, "t u 95 228") == 1);
     assert(ui.match_selected == 2 && ui.save_request && ui.page == 2);
 
-    assert(dashboard_input(&ui, "t u 42 150") == 1);
+    assert(dashboard_input(&ui, "t u 42 74") == 1); /* Units row */
     assert(ui.units_f == 1);
-    assert(dashboard_input(&ui, "t u 42 198") == 1);
+    assert(dashboard_input(&ui, "t u 42 106") == 1); /* Refresh row */
     assert(ui.refresh_request == 1);
-    assert(dashboard_input(&ui, "t u 42 246") == 1);
+    assert(dashboard_input(&ui, "t u 42 138") == 1); /* Clear row */
     assert(ui.clear_request == 1);
     assert(dashboard_input(&ui, "k d 170") == 1);
     assert(ui.page == 0);
@@ -123,7 +123,7 @@ int main(void) {
 
     /* Touch selected location and move forward/backward through forecast. */
     ui.weather.locations[0].used = 1;
-    assert(dashboard_input(&ui, "t u 75 90") == 1);
+    assert(dashboard_input(&ui, "t u 75 60") == 1); /* Current row */
     assert(ui.slot == 0 && ui.page == 1 && ui.day == 0);
     assert(dashboard_input(&ui, "w -55") == 1);
     assert(ui.day == 1);
