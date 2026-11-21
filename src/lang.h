@@ -38,7 +38,6 @@ typedef enum {
     WX_LOW,
     WX_BACK_LOCATIONS,
     WX_CENTER_DETAILS,
-    WX_ICON_CREDIT,
     WX_CLEAR,
     WX_PARTLY_CLOUDY,
     WX_CLOUDY,
