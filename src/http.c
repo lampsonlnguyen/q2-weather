@@ -483,8 +483,8 @@ int weather_request(double lat, double lon, int *temp, int *humidity, int *code,
     if (result == 0) return 0;
     /* Even a partial Open-Meteo response can lack the 7-day series.
      * Prefer an independent full forecast, retaining current data if it fails. */
-    int alternate = weather_met_request(lat, lon, temp, humidity, code, updated, dates, highs,
-                                        lows, precip, codes, day_count);
+    int alternate = weather_met_request(lat, lon, temp, humidity, code, updated, dates, highs, lows,
+                                        precip, codes, day_count);
     return alternate >= 0 ? alternate : result;
 }
 
