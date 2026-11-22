@@ -43,6 +43,38 @@ def ask(sock, *args, req=[0]):
     return head[1], head[2], rows
 
 
+def wifi_blame(binary):
+    """A Saved City with no weather yet and config.ini's WIFI=0 (the switch's saved setting, which
+    Smart Wi-Fi never writes): with wlan0 up, Wi-Fi isn't blamed; with it down, it is."""
+    root = tempfile.mkdtemp(prefix="q2-weather-")
+    for d in ("mnt/mmc/.weather", "mnt/data", "tmp", "sys/class/net/wlan0"):
+        os.makedirs(f"{root}/{d}")
+    lines = STATE.splitlines(True)
+    lines[9] = "1|1|Westminster, California, United States|33.759000|-117.993000|0|0|0|0|0\n"
+    lines[10:17] = ["1|0|-|0|0|0|0\n" for _ in range(7)]
+    open(f"{root}/mnt/mmc/.weather/state", "w").write("".join(lines))
+    open(f"{root}/mnt/data/config.ini", "w").write("[SYSSET]\nWIFI=0\n")
+    operstate = f"{root}/sys/class/net/wlan0/operstate"
+    sock = f"{root}/tmp/q2-weather.browse.sock"
+    env = dict(os.environ, WEATHER_ROOT=root, WEATHER_NO_NET="1", TZ="UTC")
+    for state, want in (("up\n", "Couldn't reach the weather service"),
+                        ("down\n", "Turn on Wi-Fi to get the weather")):
+        open(operstate, "w").write(state)
+        app = subprocess.Popen([binary], env=env)
+        try:
+            for _ in range(100):
+                if os.path.exists(sock):
+                    break
+                time.sleep(0.05)
+            time.sleep(0.3)
+            rows = ask(sock, "menu")[2]
+            assert rows[2][2] == "Westminster, California, United States", rows[2]
+            assert rows[2][3] == "Saved City \u00b7 " + want, (state, rows[2][3])
+        finally:
+            app.terminate()
+            app.wait(timeout=5)
+
+
 def main(binary):
     root = tempfile.mkdtemp(prefix="q2-weather-")
     os.makedirs(f"{root}/mnt/mmc/.weather")
@@ -93,10 +125,11 @@ def main(binary):
         assert rows[0][:2] == ["field", "cities"] and rows[0][4] == "1", rows[0]
 
         assert ask(sock, "nonsense")[0] == "unsupported"
-        print("Weather card app pages passed")
     finally:
         app.terminate()
         app.wait(timeout=5)
+    wifi_blame(binary)
+    print("Weather card app pages passed")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,10 @@
 - Temperatures show as `22°`. The units choice is kept in `.weather/units`, as before.
 - A first update that finds no network (the Apps row opens before Smart Wi-Fi's link) is tried again up to three times, 10 s apart.
 
+### Fixed
+- **Saved City never loading with Wi-Fi on:** Weather skipped every update when `/mnt/data/config.ini` said `WIFI=0`, and showed "Turn on Wi-Fi to get the weather". That key is only the Wi-Fi switch's saved setting; Q2 Pod's Smart Wi-Fi turns the radio on without writing it, so it could say 0 with the link up. Weather now always tries, and blames Wi-Fi only when an update failed and `wlan0` is down. A place cached earlier (My Location) kept showing its old reading, which is why only the Saved City looked broken.
+- Reopening the first page updates again when the last update failed, the Saved City has no weather yet, or the newest reading is over 15 minutes old (at most once a minute).
+
 ### Removed
 - The full-screen dashboard (`src/dashboard*.c`, `src/q2pod_scheme.c`, `src/theme.c`, `src/lang.c`), its built-in fonts and the `lang/` packs, and `q2-weather-service` as a separate file.
 

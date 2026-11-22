@@ -162,28 +162,27 @@ static int enable_manual_home(void) {
     return ok ? 0 : -1;
 }
 
-static int wifi_preference_on(void) {
-    FILE *f = fopen(R("/mnt/data/config.ini"), "rb");
-    if (!f) return 1;
-    char line[256];
-    int in = 0, enabled = 1;
-    while (fgets(line, sizeof line, f)) {
-        if (*line == '[') in = !strncmp(line, "[SYSSET]", 8);
-        if (in && !strncmp(line, "WIFI=", 5)) enabled = atoi(line + 5) != 0;
-    }
+/* Whether the Q2 has a Wi-Fi link now: wlan0's operstate. 1 up, 0 down, -1 unknown (no such
+ * file). config.ini's SYSSET WIFI is only the switch's saved setting: Q2 Pod's Smart Wi-Fi turns
+ * the radio on and off without writing it (its patch/smart_wifi.c), so it can say 0 while the
+ * link is up, and Weather never reads it. */
+static int wifi_link(void) {
+    char state[16] = "";
+    FILE *f = fopen(R("/sys/class/net/wlan0/operstate"), "rb");
+    if (!f) return -1;
+    if (!fgets(state, sizeof state, f)) state[0] = 0;
     fclose(f);
-    return enabled;
+    return !strncmp(state, "up", 2);
 }
 
-/* An already-running Q2 Pod card app keeps Smart Wi-Fi awake through
- * addon_running(). Never bypass the user's explicit Wi-Fi-off preference.
- * Stock firmware has no published standalone-app radio-switch ABI. */
+/* Every update is tried: a failed request costs a few seconds, and a running card app keeps
+ * Smart Wi-Fi's radio on. Wi-Fi is only blamed afterwards, when the link is down. */
 static int wifi_state(void *unused) {
     (void)unused;
 #ifdef HOST /* the page checks run with no network */
     if (getenv("WEATHER_NO_NET")) return -1;
 #endif
-    return wifi_preference_on() ? 1 : -1;
+    return 1;
 }
 
 static int wifi_power(void *unused, int enable) {
@@ -422,7 +421,7 @@ static void snapshot(WeatherApp *app, int *pending, int *error) {
 /* Why a location has no weather: Wi-Fi off, no answer yet, or no answer at all. */
 static const char *why_none(int pending, int error) {
     if (pending) return "Updating\xe2\x80\xa6";
-    if (!wifi_preference_on()) return "Turn on Wi-Fi to get the weather";
+    if (error && !wifi_link()) return "Turn on Wi-Fi to get the weather";
     if (error) return "Couldn't reach the weather service";
     return "No weather yet";
 }
@@ -529,7 +528,7 @@ static void result_rows(Reply *r, int slot, const char *query) {
     }
     if (count <= 0) {
         info(r, "No place has that name",
-             wifi_preference_on() ? "Check the spelling" : "Turn on Wi-Fi to search");
+             wifi_link() ? "Check the spelling" : "Turn on Wi-Fi to search");
         return;
     }
     for (int i = 0; i < count; ++i) {
@@ -583,7 +582,7 @@ static void page_settings(Reply *r) {
                     : app.locations[1].updated_at;
     updated_text(sub, sizeof sub, last);
     row(r, "action", "refresh", pending ? "Updating\xe2\x80\xa6" : "Update Now", sub, "");
-    if (!wifi_preference_on())
+    if (error && !pending && !wifi_link())
         info(r, "Wi-Fi is off", "Weather shows what it last got");
     else if (error && !pending)
         info(r, "Last update failed", "Details in .weather/weather.log");
@@ -630,14 +629,34 @@ static void save_city(Reply *r, const char *arg) {
         snprintf(r->message, sizeof r->message, "Can't save that place");
 }
 
+/* The first page asked for again (it's reopened, or its 2 s refresh while updating): a new update
+ * when the last one failed or is over 15 minutes old, at most once a minute. */
+static time_t last_try;
+static void reopen_refresh(void) {
+    time_t now = time(NULL);
+    pthread_mutex_lock(&state_mutex);
+    long newest = rt.app.locations[0].updated_at > rt.app.locations[1].updated_at
+                      ? rt.app.locations[0].updated_at
+                      : rt.app.locations[1].updated_at;
+    int stale = rt.error || (rt.app.locations[1].used && !rt.app.locations[1].valid) ||
+                now - newest > 15 * 60;
+    int go = !rt.pending && stale && now - last_try >= 60;
+    pthread_mutex_unlock(&state_mutex);
+    if (go) {
+        last_try = now;
+        refresh();
+    }
+}
+
 static void handle(char **args, int count, Reply *r) {
     const char *op = count > 1 ? args[1] : "";
     const char *arg = count > 2 ? args[2] : "";
     snprintf(r->status, sizeof r->status, "ok");
     rt.art = has_cap("art");
-    if (!strcmp(op, "menu"))
+    if (!strcmp(op, "menu")) {
+        reopen_refresh();
         page_menu(r);
-    else if (!strcmp(op, "location"))
+    } else if (!strcmp(op, "location"))
         page_location(r, arg);
     else if (!strcmp(op, "settings"))
         page_settings(r);
@@ -739,6 +758,7 @@ int main(void) {
      * times, 10 s apart, while the page is open. */
     refresh();
     time_t last = time(NULL), tried = last;
+    last_try = last;
     int retries = 0;
     while (!stopped && time(NULL) - last < 600) {
         pthread_mutex_lock(&state_mutex);
@@ -746,7 +766,7 @@ int main(void) {
         pthread_mutex_unlock(&state_mutex);
         if (again) {
             ++retries;
-            tried = time(NULL);
+            tried = last_try = time(NULL);
             refresh();
         }
         struct pollfd p = { fd, POLLIN, 0 };

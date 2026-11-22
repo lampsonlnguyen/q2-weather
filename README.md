@@ -44,7 +44,7 @@ A place's page has its weather now (temperature, condition, today's high and low
 
 Choosing a city: press **City name:**, type in Q2 Pod's search box, and pick the place from the matches (each with its region and country). The click wheel, touch, scrolling, the search box and the title bar are all Q2 Pod's own.
 
-Weather updates both places when its page opens and when asked. Its row opens at once, before Smart Wi-Fi has its link, so a first update that finds no network is tried again a few times. With no network the last forecast stays on the page. Weather never turns Wi-Fi on or off; with Wi-Fi off in the Q2's settings it says so.
+Weather updates both places when its page opens and when asked. Its row opens at once, before Smart Wi-Fi has its link, so a first update that finds no network is tried again a few times. With no network the last forecast stays on the page. Weather never turns Wi-Fi on or off. It always tries an update, and says Wi-Fi is off only when an update failed and the Q2 has no Wi-Fi link (`wlan0` down). It doesn't go by `config.ini`'s `WIFI=`, which is only the Wi-Fi switch's saved setting: Smart Wi-Fi turns the radio on and off without writing it. Reopening Weather's first page updates again when the last update failed or is over 15 minutes old, at most once a minute.
 
 ## Install or upgrade
 
