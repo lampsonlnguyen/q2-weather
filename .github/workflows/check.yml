@@ -37,7 +37,12 @@ jobs:
           sh tools/sysroot.sh
           make
           unzip -t dist/q2-weather.zip
-          unzip -l dist/q2-weather.zip | grep '.weather/icon.png'
+          for icon in icon.png icon-40.png pane.png; do
+            unzip -Z1 dist/q2-weather.zip | grep -Fx ".weather/$icon"
+          done
+          file dist/.weather/icon.png | grep -F '52 x 52'
+          file dist/.weather/icon-40.png | grep -F '40 x 40'
+          file dist/.weather/pane.png | grep -F '96 x 96'
           test "$(unzip -Z1 dist/q2-weather.zip | grep -c '^.weather/icons/.*\.jpg$')" -eq 11
           unzip -p dist/q2-weather.zip .weather/q2app | grep -Fx 'row=library'
           ! unzip -p dist/q2-weather.zip .weather/q2app | grep -q '^game='

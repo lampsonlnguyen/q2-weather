@@ -51,7 +51,7 @@ $(DIST)/run: run
 	cp $< $@
 	chmod 755 $@
 
-$(DIST)/icon.png: assets/icon.png
+$(DIST)/%.png: assets/%.png
 	mkdir -p $(@D)
 	cp $< $@
 
@@ -63,9 +63,9 @@ $(DIST)/icons/%.jpg: build/icons/.stamp
 	mkdir -p $(@D)
 	cp build/icons/$*.jpg $@
 
-dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/run $(DIST)/q2app $(DIST)/icon.png $(DIST_ICONS)
+dist/q2-weather.zip: $(DIST)/q2-weather $(DIST)/run $(DIST)/q2app $(DIST)/icon.png $(DIST)/icon-40.png $(DIST)/pane.png $(DIST_ICONS)
 	cd dist && rm -f q2-weather.zip && zip -qX q2-weather.zip .weather/q2-weather .weather/run \
-		.weather/q2app .weather/icon.png .weather/icons/*.jpg
+		.weather/q2app .weather/icon.png .weather/icon-40.png .weather/pane.png .weather/icons/*.jpg
 
 build/test_weather: src/weather.c src/weather.h tests/test_weather.c
 	mkdir -p build
